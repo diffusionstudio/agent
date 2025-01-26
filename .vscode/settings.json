@@ -1,0 +1,4 @@
+{
+  "python.analysis.typeCheckingMode": "standard",
+  "python.defaultInterpreterPath": "/opt/homebrew/Caskroom/miniforge/base/bin/python3"
+}
