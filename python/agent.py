@@ -44,11 +44,6 @@ class Agent:
         # Wait for scripts to load
         await self.page.wait_for_function("typeof window.core !== 'undefined'")
 
-        # Pre-allocate output file
-        with open(self.output, "wb") as f:
-            # 100MB pre-allocation
-            f.truncate(1024 * 1024 * 100)
-
         input = self.page.locator("#file-input")
         print("Scripts loaded")
 
