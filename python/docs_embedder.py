@@ -4,7 +4,7 @@ import vecs
 from loguru import logger
 from tqdm import tqdm
 from utils import generate_embeddings, chunk_markdown, situate_context
-from config import DB_CONNECTION
+from config import DB_CONNECTION, QUERY_PROMPT
 
 if not DB_CONNECTION:
     raise ValueError("DB_CONNECTION must be set in config.py")
@@ -36,12 +36,14 @@ async def embed_docs():
                 chunk_pbar = tqdm(total=len(chunks), desc=f"Chunks of {md_file.name}", unit="chunk", leave=False)
                 for i, chunk in enumerate(chunks):
                     try:
-                        # Generate embedding for chunk
-                        embedding = await generate_embeddings(chunk)
-                        
+ 
                         # Get context for chunk
-                        context, usage = await situate_context(full_content, chunk)
+                        contextialzed_chunk , usage = await situate_context(full_content, chunk)
                         logger.debug(f"Context generation usage: {usage} for chunk {i}")
+                        
+                        text_to_embed = f"{contextialzed_chunk}\n\n{chunk}"
+                        # Generate embedding for chunk
+                        embedding = await generate_embeddings(QUERY_PROMPT + text_to_embed)
                         
                         # Each chunk gets its own record with unique ID
                         chunk_id = f"{md_file}#chunk{i}" if len(chunks) > 1 else str(md_file)
@@ -51,13 +53,13 @@ async def embed_docs():
                             records=[
                                 (
                                     chunk_id,
-                                    embedding[0],  # First embedding from response
+                                    embedding,  # API returns vector directly
                                     {
                                         "filename": md_file.name,
                                         "chunk_index": i,
                                         "total_chunks": len(chunks),
                                         "content": chunk,
-                                        "context": context
+                                        "context": contextialzed_chunk
                                     }
                                 )
                             ]
