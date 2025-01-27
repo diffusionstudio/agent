@@ -13,5 +13,6 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "qdrant-client>=1.13.2",
     "rich>=13.9.4",
+    "ruff>=0.9.3",
     "tqdm>=4.67.1",
 ]
