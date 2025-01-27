@@ -98,7 +98,7 @@ async def search_docs(
         raise
 
 
-async def embed_docs():
+async def embed_docs(debug: bool = False):
     try:
         # Initialize Qdrant client with persistent storage
         client = QdrantClient(path="docs/vector_db")
@@ -127,18 +127,23 @@ async def embed_docs():
         for pattern in ["*.md", "*/*.md", "*/*/*.md"]:
             md_files.extend(docs_dir.glob(pattern))
         md_files = sorted(set(md_files))
+
+        if debug:
+            md_files = md_files[:5]
+            logger.warning("DEBUG MODE: Processing only first 5 files")
+
         logger.info(
             f"Found {len(md_files)} markdown files in {docs_dir} and subdirectories"
         )
 
-        # Main progress bar for files
+        # Collect all points for batch upload
+        points = []
         for md_file in tqdm(md_files, desc="Processing files", unit="file"):
             try:
                 full_content = md_file.read_text(encoding="utf-8")
                 chunks = chunk_markdown(full_content)
                 logger.info(f"Processing {md_file.name} in {len(chunks)} chunks")
 
-                points = []
                 for i, chunk in enumerate(
                     tqdm(
                         chunks,
@@ -191,14 +196,19 @@ async def embed_docs():
                         )
                         continue
 
-                # Batch upsert points for this file
-                if points:
-                    client.upsert(collection_name=COLLECTION_NAME, points=points)
-                    logger.success(f"Embedded {len(points)} chunks from {md_file.name}")
-
             except Exception as e:
                 logger.error(f"Failed to process file {md_file.name}: {str(e)}")
                 continue
+
+        # Batch upload all points
+        if points:
+            logger.info(f"Uploading {len(points)} points to Qdrant...")
+            client.upload_points(
+                collection_name=COLLECTION_NAME,
+                points=points,
+                batch_size=64,  # Adjust based on your memory constraints
+            )
+            logger.success(f"Successfully uploaded {len(points)} chunks")
 
         logger.success("Completed embedding all documents")
 
@@ -212,7 +222,10 @@ async def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Embed command
-    subparsers.add_parser("embed", help="Embed documentation")
+    embed_parser = subparsers.add_parser("embed", help="Embed documentation")
+    embed_parser.add_argument(
+        "--debug", action="store_true", help="Process only first 5 files"
+    )
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search documentation")
@@ -224,7 +237,7 @@ async def main():
     args = parser.parse_args()
 
     if args.command == "embed":
-        await embed_docs()
+        await embed_docs(debug=args.debug)
     elif args.command == "search":
         filter_conditions = {}
         if args.filepath:

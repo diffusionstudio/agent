@@ -32,5 +32,5 @@ Answer only with the succinct context and nothing else.
 
 QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
 
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # seconds
+MAX_RETRIES = 10
+RETRY_DELAY = 10  # seconds
