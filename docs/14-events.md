@@ -1,3 +1,5 @@
+# Events
+
 Diffusion Studio is built around an event-driven architecture, making it essential to understand how events work within the library. Events play a significant role in how you interact with key components such as **Composition**, **Track**, and **Clip**. We've tailored our event system to be compatible with modern frontend frameworks like React, providing a seamless development experience.
 
 ### Composition Events

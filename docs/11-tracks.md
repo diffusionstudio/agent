@@ -1,3 +1,5 @@
+# Tracks
+
 Tracks serve as an abstraction layer in Diffusion Studio, providing three key functionalities:
 
 1. **Efficient Clip Rendering:** Tracks determine which clips will be rendered, enabling the software to bypass unnecessary iterations over non-visible clips. Only visible clips within the track are processed.

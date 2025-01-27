@@ -1,0 +1,1 @@
+How do you apply a RectangleMask to a video clip?

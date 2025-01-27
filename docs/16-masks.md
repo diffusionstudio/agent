@@ -1,3 +1,5 @@
+# Masks
+
 Masks are essential tools to crop, hide, or emphasize specific parts of your video. Here, we will demonstrate how to use the `RectangleMask` and how to apply it to a video clip.
 
 ## What is a Mask?
@@ -13,12 +15,12 @@ To get started, we will create a composition, define a `RectangleMask`, and appl
 ### Code Example
 
 ```typescript
-import { Composition, RectangleMask, VideoClip } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 // Step 1: Create a composition
-const composition = new Composition();
+const composition = new core.Composition();
 
 // Step 2: Define a RectangleMask
-const mask = new RectangleMask({
+const mask = new core.RectangleMask({
   x: 480, // Horizontal offset
   y: 0,   // Vertical offset
   width: composition.width - 960, // Mask width
@@ -28,7 +30,7 @@ const mask = new RectangleMask({
 
 // Step 3: Add a video clip with the mask applied
 await composition.add(
-  new VideoClip(new File([], 'sample.mp4'), {
+  new core.VideoClip(new File([], 'sample.mp4'), {
     position: 'center', // Center the video in the composition
     muted: true,        // Mute the video
     mask,               // Apply the mask

@@ -1,0 +1,1 @@
+How do you create a RectangleMask that covers the entire composition without any offsets or corner radius?

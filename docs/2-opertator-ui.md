@@ -1,3 +1,5 @@
+# Operator UI
+
 The [Operator UI](https://operator-ui.vercel.app) provides a set of convenience functions and object references for interacting with the video editor programmatically.
 
 ## Functions
@@ -29,8 +31,8 @@ The following example demonstrates how to:
 4. Render the final composition.
 
 ```javascript
-const [videoFile] = await window.files();
-const video = new window.core.VideoClip(videoFile).subclip(0, 150);
-await window.composition.add(video);
-await window.render();
+const [videoFile] = await files();
+const video = new core.VideoClip(videoFile).subclip(0, 150);
+await composition.add(video);
+await render();
 ```

@@ -1,0 +1,7 @@
+```javascript
+import * as core from '@diffusionstudio/core';
+
+const source = await core.VideoSource.from('https://example.com/sample.mp4');
+```
+
+The VideoSource.from(url) method asynchronously loads a video from the specified URL, which can then be used for creating clips.

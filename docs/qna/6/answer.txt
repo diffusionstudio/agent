@@ -1,0 +1,6 @@
+```javascript
+const files = await window.files();
+console.log(files); // [File, File, ...]
+```
+
+This code correctly calls window.files(), which returns a Promise<File[]>, ensuring access to all uploaded files.

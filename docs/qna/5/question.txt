@@ -1,0 +1,1 @@
+How do you trim a video clip to start at frame 30 and end at frame 180?

@@ -1,3 +1,5 @@
+# Video Clip
+
 This guide provides a comprehensive overview of manipulating videos and exporting the final product.
 
 ## Adding and Manipulating Video
@@ -19,14 +21,13 @@ A `VideoSource` is a reusable reference that can be shared across multiple clips
 Now, create a `VideoClip` from the `VideoSource`:
 
 ```typescript
-import * as core from '@diffusionstudio/core';
-
 const video = new core.VideoClip(source, { // also accepts new File(...)
   position: 'center', // ensures the clip is centered
   height: '100%', // stretches the clip to the full height
-  width: '100%', // stretches the clip to the full width
 }); 
 ```
+
+> Note: By not setting width to 100%, the video will maintain its original aspect ratio.
 
 ### Performing Video Manipulations
 

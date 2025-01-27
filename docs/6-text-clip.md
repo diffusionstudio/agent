@@ -1,4 +1,4 @@
-## Styling Text Clips
+# Text Clips
 
 Here is a basic example of how to style text clips:
 

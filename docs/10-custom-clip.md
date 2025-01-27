@@ -1,3 +1,5 @@
+# Custom Clip
+
 Diffusion Studio functionality can be extended using custom `Clip` objects. In this guide, we will walk through the steps of creating a custom `Clip` object using and rendering it to the canvas. Before diving into the example, let's first discuss the lifecycle of a `Clip` object.
 
 ## Clip Lifecycle
