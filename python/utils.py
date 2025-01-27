@@ -12,27 +12,35 @@ def clear_file_path(output: str):
         os.remove(output)
         print(f"Removed existing file: {output}")
 
-async def generate_embeddings(payload, timeout=30):
+def chunk_markdown(content: str, max_lines: int = 100) -> list[str]:
+    """Split markdown into chunks of max_lines if needed."""
+    lines = content.splitlines()
+    if len(lines) <= max_lines:
+        return [content]
+    
+    chunks = []
+    for i in range(0, len(lines), max_lines):
+        chunk = "\n".join(lines[i:i + max_lines])
+        chunks.append(chunk)
+    return chunks
+
+async def generate_embeddings(text: str, timeout=30):
     """
     Generate embeddings for the given text using MXBAI API.
     
     Args:
-        payload (dict): Request payload containing text to embed
+        text (str): Text to embed
         timeout (int, optional): Request timeout in seconds. Defaults to 30.
     
     Returns:
         dict: JSON response containing embeddings
-        
-    Raises:
-        TimeoutError: If request times out
-        RuntimeError: If request fails for any other reason
     """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 MXBAI_API_URL,
                 headers=MXBAI_HEADERS,
-                json=payload,
+                json={"inputs": text},
                 timeout=timeout
             )
             response.raise_for_status()
