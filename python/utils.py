@@ -9,6 +9,20 @@ def clear_file_path(output: str):
         print(f"Removed existing file: {output}")
 
 async def generate_embeddings(payload, timeout=30):
+    """
+    Generate embeddings for the given text using MXBAI API.
+    
+    Args:
+        payload (dict): Request payload containing text to embed
+        timeout (int, optional): Request timeout in seconds. Defaults to 30.
+    
+    Returns:
+        dict: JSON response containing embeddings
+        
+    Raises:
+        TimeoutError: If request times out
+        RuntimeError: If request fails for any other reason
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -26,8 +40,19 @@ async def generate_embeddings(payload, timeout=30):
 
 async def rerank(query: str, documents: list[str], timeout=30):
     """
-    Rerank documents based on relevance to query.
-    Returns list of scores between 0 and 1.
+    Rerank documents based on relevance to query using MXBAI reranking API.
+    
+    Args:
+        query (str): The query text to compare documents against
+        documents (list[str]): List of document texts to rerank
+        timeout (int, optional): Request timeout in seconds. Defaults to 30.
+    
+    Returns:
+        list[float]: List of relevance scores between 0 and 1 for each document
+        
+    Raises:
+        TimeoutError: If request times out
+        RuntimeError: If request fails for any other reason
     """
     try:
         payload = {
