@@ -1,3 +1,5 @@
 __pycache__
 **/output/*
 python/output/**
+.python-version
+.env
