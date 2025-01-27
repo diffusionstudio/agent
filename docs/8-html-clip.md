@@ -1,3 +1,5 @@
+# HTML Clip
+
 In Diffusion Studio, HTML elements are treated as images. Currently, loading HTML with dynamic content is not supported, as HTML is rendered as an SVG inside a [\<foreignObject\>](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/foreignObject). However, HTML is very useful for rendering responsive layouts and utilizing CSS features.
 
 ## Layout

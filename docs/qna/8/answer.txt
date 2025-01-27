@@ -1,0 +1,10 @@
+```javascript
+import * as core from '@diffusionstudio/core';
+
+const source = await core.ImageSource.from('https://example.com/image.png');
+const image = new core.ImageClip(source, { delay: 30, duration: 150 });
+
+await composition.add(image);
+```
+
+This code correctly initializes an ImageClip with a source image, sets its delay and duration, and adds it to the composition.

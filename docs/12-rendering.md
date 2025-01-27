@@ -1,3 +1,5 @@
+# Rendering
+
 Rendering videos on the client side is made highly efficient by utilizing WebCodecs, a modern browser API that supports hardware-accelerated encoding. This allows for fast and optimized video processing directly in the browser.
 
 ## Setup

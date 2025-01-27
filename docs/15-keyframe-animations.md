@@ -1,4 +1,4 @@
-# Getting Started with Keyframe Animations
+# Keyframe Animations
 
 With Diffusion Studio, you can easily create complex animations by defining how properties of an object change over time using **keyframes**.
 

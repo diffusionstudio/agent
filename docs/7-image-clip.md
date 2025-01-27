@@ -1,3 +1,5 @@
+# Image Clip
+
 The `ImageClip` class, like all static clips (excluding Video & Audio), has a fixed start and stop time.
 
 ## Basic Usage

@@ -1,3 +1,5 @@
+# Audio Clip
+
 This guide will walk you through the steps of splitting an audio file into multiple clips, offsetting the start time of each clip, and trimming them.
 
 ## Manual Approach

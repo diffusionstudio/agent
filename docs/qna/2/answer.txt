@@ -1,0 +1,11 @@
+```javascript
+await composition.add(
+  new core.VideoClip(new File([], 'video.mp4'), {
+    position: 'center',
+    mask,
+    height: '100%',
+  })
+);
+```
+
+The `mask` is an attribute of the `VideoClip` object.

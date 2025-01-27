@@ -1,0 +1,11 @@
+```javascript
+import * as core from '@diffusionstudio/core';
+
+const video = new core.VideoClip(source, {
+  position: 'center',
+  height: '100%',
+  width: '100%',
+});
+```
+
+Setting height to 100% ensures the video fully covers the composition's height, while position: 'center' aligns it properly. By not setting width to 100%, the video will maintain its original aspect ratio.

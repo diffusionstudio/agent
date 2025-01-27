@@ -1,0 +1,1 @@
+How do you create a VideoClip and ensure it fills the entire height of the composition?

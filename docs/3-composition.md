@@ -1,3 +1,5 @@
+# Composition
+
 A `Composition` object manages the entire state of a video project and serves as the foundation for any video editing tasks in Diffusion Studio. This guide will walk you through setting up and manipulating a `Composition` object.
 
 ## Setting Up a Composition

@@ -1,0 +1,5 @@
+```javascript
+video.subclip(30, 180);
+```
+
+The subclip(startFrame, endFrame) method trims the video between the specified frames, ensuring only the desired segment is retained.

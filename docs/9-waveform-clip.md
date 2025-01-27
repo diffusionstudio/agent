@@ -1,4 +1,4 @@
-# Waveform Clip Guide
+# Waveform Clip
 
 The `WaveformClip` in Diffusion Studio allows you to generate visually appealing and customizable waveform visualizations for audio files. This guide will walk you through the usage and configuration of the `WaveformClip` class.
 

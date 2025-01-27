@@ -1,0 +1,1 @@
+How do you trim an ImageClip to start at frame 20 and end at frame 80?

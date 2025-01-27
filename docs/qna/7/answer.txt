@@ -1,0 +1,7 @@
+```javascript
+const [videoFile] = await files();
+const video = new core.VideoClip(videoFile);
+await composition.add(video);
+```
+
+This ensures the video file is wrapped in a VideoClip instance and then added to window.composition asynchronously.

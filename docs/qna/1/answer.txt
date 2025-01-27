@@ -1,0 +1,10 @@
+```javascript
+const mask = new core.RectangleMask({
+  x: 0,
+  y: 0,
+  width: composition.width,
+  height: composition.height,
+  radius: 0,
+});
+```
+This ensures the mask starts at (0,0), spans the full width and height of the composition, and has no rounded corners.

@@ -1,0 +1,16 @@
+```javascript
+new core.RectangleClip({
+  animations: [
+    {
+      key: 'y', 
+      easing: 'ease-in',
+      frames: [
+        { frame: 0, value: 100 },
+        { frame: 150, value: 500 },
+      ],
+    },
+  ]
+});
+```
+
+The key is set to 'y' to animate the y position. The easing function 'ease-in' ensures a slow start, and the two keyframes define the transition from 100 to 500 over 150 frames.

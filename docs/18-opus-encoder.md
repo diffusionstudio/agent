@@ -1,3 +1,5 @@
+# Opus Encoder
+
 Since the `AudioEncoder` API is currently only supported on Chromium-based browsers, we have implemented a replacement using an Emscripten-compiled version of [libopus](https://github.com/xiph/opus). In this guide, we will use an audio buffer generated with the Web Audio API and multiplex it into an MP4 container using [mp4-muxer](https://github.com/Vanilagy/mp4-muxer).
 
 ## Basic Setup

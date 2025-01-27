@@ -1,0 +1,5 @@
+```javascript
+image.trim(20, 80);
+```
+
+The trim method sets the clip’s new delay and duration based on the specified frame range.

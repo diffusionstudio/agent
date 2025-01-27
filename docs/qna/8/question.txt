@@ -1,0 +1,1 @@
+How do you create an ImageClip, delay it by one second and display it for 150 frames, then add it to a composition?

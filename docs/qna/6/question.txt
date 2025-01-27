@@ -1,0 +1,1 @@
+How do you retrieve all uploaded files in operator UI environment?
