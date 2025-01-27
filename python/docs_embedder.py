@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 import vecs
 from loguru import logger
+from tqdm import tqdm
 from utils import generate_embeddings, chunk_markdown, situate_context
 from config import DB_CONNECTION
 
@@ -23,13 +24,16 @@ async def embed_docs():
         md_files = list(docs_dir.glob("**/*.md"))
         logger.info(f"Found {len(md_files)} markdown files")
         
-        for md_file in md_files:
+        # Main progress bar for files
+        for md_file in tqdm(md_files, desc="Processing files", unit="file"):
             try:
                 # Read full content first
                 full_content = md_file.read_text(encoding='utf-8')
                 chunks = chunk_markdown(full_content)
                 logger.info(f"Processing {md_file.name} in {len(chunks)} chunks")
                 
+                # Nested progress bar for chunks
+                chunk_pbar = tqdm(total=len(chunks), desc=f"Chunks of {md_file.name}", unit="chunk", leave=False)
                 for i, chunk in enumerate(chunks):
                     try:
                         # Generate embedding for chunk
@@ -59,9 +63,11 @@ async def embed_docs():
                             ]
                         )
                         logger.success(f"Embedded {md_file.name} chunk {i+1}/{len(chunks)}")
+                        chunk_pbar.update(1)
                     except Exception as e:
                         logger.error(f"Failed to process chunk {i} of {md_file.name}: {str(e)}")
                         continue
+                chunk_pbar.close()
             except Exception as e:
                 logger.error(f"Failed to process file {md_file.name}: {str(e)}")
                 continue

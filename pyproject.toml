@@ -10,5 +10,6 @@ dependencies = [
     "loguru>=0.7.3",
     "playwright>=1.49.1",
     "python-dotenv>=1.0.1",
+    "tqdm>=4.67.1",
     "vecs>=0.4.5",
 ]
