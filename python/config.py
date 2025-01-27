@@ -1,12 +1,18 @@
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
-MXBAI_API_URL = "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-embed-large-v1"
-MXBAI_RERANK_URL = "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-rerank-base-v1"
+MXBAI_API_URL = (
+    "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-embed-large-v1"
+)
+EMBEDDING_DIM = 1024  # Dimension of embeddings from https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/blob/main/config.json#L11
+MXBAI_RERANK_URL = (
+    "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-rerank-base-v1"
+)
 MXBAI_HEADERS = {"Authorization": f"Bearer {os.getenv('HUGGINGFACE_TOKEN')}"}
-DB_CONNECTION = os.getenv('DB_CONNECTION')
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+DB_CONNECTION = os.getenv("DB_CONNECTION")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 DOCUMENT_CONTEXT_PROMPT = """
 <document>
@@ -25,3 +31,6 @@ Answer only with the succinct context and nothing else.
 """
 
 QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
+
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds

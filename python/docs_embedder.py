@@ -4,7 +4,8 @@ import vecs
 from loguru import logger
 from tqdm import tqdm
 from utils import generate_embeddings, chunk_markdown, situate_context
-from config import DB_CONNECTION, QUERY_PROMPT
+from config import DB_CONNECTION, EMBEDDING_DIM
+
 
 if not DB_CONNECTION:
     raise ValueError("DB_CONNECTION must be set in config.py")
@@ -17,13 +18,22 @@ async def embed_docs():
         logger.info("Connected to vector DB")
 
         # Create or get collection for docs
-        docs = vx.get_or_create_collection(name="docs", dimension=1024)
+        docs = vx.get_or_create_collection(name="docs", dimension=EMBEDDING_DIM)
         logger.info("Created/got docs collection")
 
-        # Get all MD files
+        # Get all MD files recursively including subdirectories
         docs_dir = Path(__file__).parent.parent / "docs"
-        md_files = list(docs_dir.glob("**/*.md"))
-        logger.info(f"Found {len(md_files)} markdown files")
+        md_files = []
+        for pattern in [
+            "*.md",
+            "*/*.md",
+            "*/*/*.md",
+        ]:  # Handle root, api/, and api/subdirs/
+            md_files.extend(docs_dir.glob(pattern))
+        md_files = sorted(set(md_files))  # Remove duplicates and sort
+        logger.info(
+            f"Found {len(md_files)} markdown files in {docs_dir} and subdirectories"
+        )
 
         # Main progress bar for files
         for md_file in tqdm(md_files, desc="Processing files", unit="file"):
@@ -51,13 +61,18 @@ async def embed_docs():
                         text_to_embed = f"{chunk}\n\n{contextialzed_chunk}"
 
                         # Generate embedding for chunk
-                        embedding = await generate_embeddings(
-                            QUERY_PROMPT + text_to_embed
-                        )
+                        embedding = await generate_embeddings(text_to_embed)
+
+                        # Verify embedding dimension
+                        if len(embedding) != EMBEDDING_DIM:
+                            raise ValueError(
+                                f"Expected embedding dimension {EMBEDDING_DIM}, got {len(embedding)}"
+                            )
 
                         # Each chunk gets its own record with unique ID
+                        rel_path = md_file.relative_to(docs_dir)
                         chunk_id = (
-                            f"{md_file}#chunk{i}" if len(chunks) > 1 else str(md_file)
+                            f"{rel_path}#chunk{i}" if len(chunks) > 1 else str(rel_path)
                         )
 
                         # Store in vector DB
@@ -68,7 +83,9 @@ async def embed_docs():
                                     embedding,  # API returns vector directly
                                     {
                                         "filename": md_file.name,
+                                        "filepath": str(rel_path),
                                         "chunk_index": i,
+                                        "total_chunks": len(chunks),
                                         "original_content": chunk,
                                         "contextualized_content": contextialzed_chunk,
                                     },
