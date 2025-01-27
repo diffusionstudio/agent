@@ -22,7 +22,78 @@ from rich import box
 from rich.markdown import Markdown
 from utils import generate_embeddings, chunk_markdown, situate_context, rerank
 from config import COLLECTION_NAME, EMBEDDING_DIM
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Any
+from smolagents import Tool
+
+
+class DocsSearchTool(Tool):
+    name = "docs_search_tool"
+    description = "A tool that searches through Diffusion Studio's documentation to find relevant code examples and syntax."
+    inputs = {
+        "query": {
+            "type": "string",
+            "description": "The search query about DiffStudio's functionality (e.g. 'how to add text overlay' or 'video transitions')",
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return",
+            "nullable": True,
+        },
+        "filter_conditions": {
+            "type": "object",
+            "description": "Optional filters for specific documentation sections",
+            "nullable": True,
+        },
+        "rerank_results": {
+            "type": "boolean",
+            "description": "Whether to use semantic reranking for more accurate results",
+            "nullable": True,
+        },
+    }
+    output_type = "array"
+
+    def forward(
+        self,
+        query: str,
+        limit: int = 5,
+        filter_conditions: Optional[
+            Dict[str, Union[str, int, float, List[str]]]
+        ] = None,
+        rerank_results: bool = False,
+    ) -> Any:
+        """Search for documentation snippets."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # If no loop is running, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(
+                    self._async_forward(query, limit, filter_conditions, rerank_results)
+                )
+            finally:
+                loop.close()
+        else:
+            # If we're already in an event loop, just create the coroutine
+            return loop.create_task(
+                self._async_forward(query, limit, filter_conditions, rerank_results)
+            )
+
+    async def _async_forward(
+        self,
+        query: str,
+        limit: int,
+        filter_conditions: Optional[Dict[str, Union[str, int, float, List[str]]]],
+        rerank_results: bool,
+    ) -> List[Dict]:
+        """Async implementation of the forward method."""
+        return await search_docs(
+            query=query,
+            limit=limit,
+            filter_conditions=filter_conditions,
+            rerank_results=rerank_results,
+        )
 
 
 async def search_docs(
@@ -32,17 +103,17 @@ async def search_docs(
     rerank_results: bool = False,
 ) -> List[Dict]:
     """
-    Search for similar documents using a text query.
+    A tool that searches through Diffusion Studio's documentation to find relevant code examples and syntax.
+    It helps you find the right way to use DiffStudio's video editing library.
 
     Args:
-        query: Text query to search for
-        limit: Number of results to return
-        filter_conditions: Optional dict of field conditions for filtering
-            Example: {"filepath": "api/classes/", "chunk_index": 0}
-        rerank_results: Whether to apply semantic reranking (slower but more accurate)
+        query: The search query about DiffStudio's functionality (e.g. "how to add text overlay" or "video transitions")
+        limit: Maximum number of results to return
+        filter_conditions: Optional filters for specific documentation sections
+        rerank_results: Whether to use semantic reranking for more accurate results
 
     Returns:
-        List of matching documents with scores and metadata
+        List of matching documentation snippets with their relevance scores and context
     """
     try:
         logger.info(f"Starting search for query: '{query}'")

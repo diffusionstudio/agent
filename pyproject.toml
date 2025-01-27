@@ -14,5 +14,6 @@ dependencies = [
     "qdrant-client>=1.13.2",
     "rich>=13.9.4",
     "ruff>=0.9.3",
+    "smolagents>=1.5.1",
     "tqdm>=4.67.1",
 ]

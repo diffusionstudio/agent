@@ -18,11 +18,24 @@ from config import (
 client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
 
-def clear_file_path(output: str):
-    """Clears the output path if it exists."""
-    if os.path.exists(output):
-        os.remove(output)
-        print(f"Removed existing file: {output}")
+def clear_file_path(path: str) -> None:
+    """Clear a file path, creating directories if needed."""
+    try:
+        # Create directory if it doesn't exist
+        directory = os.path.dirname(path)
+        if directory:
+            logger.debug(f"Ensuring directory exists: {directory}")
+            os.makedirs(directory, exist_ok=True)
+
+        # Remove file if it exists
+        if os.path.exists(path):
+            logger.debug(f"Removing existing file: {path}")
+            os.remove(path)
+
+        logger.debug(f"Path cleared: {path}")
+    except Exception as e:
+        logger.error(f"Failed to clear path {path}: {str(e)}")
+        raise
 
 
 def chunk_markdown(content: str, max_lines: int = 100) -> list[str]:
