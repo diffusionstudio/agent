@@ -11,6 +11,6 @@ dependencies = [
     "playwright>=1.49.1",
     "pre-commit>=4.1.0",
     "python-dotenv>=1.0.1",
+    "qdrant-client>=1.13.2",
     "tqdm>=4.67.1",
-    "vecs>=0.4.5",
 ]

@@ -1,36 +1,127 @@
 import asyncio
 from pathlib import Path
-import vecs
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    VectorParams,
+    PointStruct,
+    Filter,
+    FieldCondition,
+    Range,
+    MatchText,
+    MatchAny,
+    ScoredPoint,
+)
 from loguru import logger
 from tqdm import tqdm
 from utils import generate_embeddings, chunk_markdown, situate_context
-from config import DB_CONNECTION, EMBEDDING_DIM
+from config import COLLECTION_NAME, EMBEDDING_DIM
+from typing import List, Dict, Optional, Union, cast
 
 
-if not DB_CONNECTION:
-    raise ValueError("DB_CONNECTION must be set in config.py")
+async def search_docs(
+    query: str,
+    limit: int = 5,
+    filter_conditions: Optional[Dict[str, Union[str, int, float, List[str]]]] = None,
+) -> List[Dict]:
+    """
+    Search for similar documents using a text query.
+
+    Args:
+        query: Text query to search for
+        limit: Number of results to return
+        filter_conditions: Optional dict of field conditions for filtering
+            Example: {"filepath": "api/classes/", "chunk_index": 0}
+
+    Returns:
+        List of matching documents with scores and metadata
+    """
+    try:
+        client = QdrantClient(path="docs/vector_db")
+
+        # Generate embedding for query
+        query_embedding = await generate_embeddings(query)
+
+        # Build filter if conditions provided
+        search_filter = None
+        if filter_conditions:
+            must_conditions = []
+            for field, value in filter_conditions.items():
+                if isinstance(value, (int, float)):
+                    must_conditions.append(
+                        FieldCondition(key=field, range=Range(gte=value))
+                    )
+                elif isinstance(value, str):
+                    must_conditions.append(
+                        FieldCondition(key=field, match=MatchText(text=value))
+                    )
+                elif isinstance(value, list):
+                    must_conditions.append(
+                        FieldCondition(key=field, match=MatchAny(any=value))
+                    )
+
+            if must_conditions:
+                search_filter = Filter(must=must_conditions)
+
+        # Execute search
+        results = client.query_points(
+            collection_name=COLLECTION_NAME,
+            query=query_embedding,
+            query_filter=search_filter,
+            limit=limit,
+        )
+
+        # Format results
+        hits = []
+        for scored_point in cast(List[ScoredPoint], results):
+            payload = scored_point.payload or {}
+            hits.append(
+                {
+                    "score": scored_point.score,
+                    "content": payload.get("original_content"),
+                    "context": payload.get("contextualized_content"),
+                    "filepath": payload.get("filepath"),
+                    "chunk_index": payload.get("chunk_index"),
+                    "total_chunks": payload.get("total_chunks"),
+                }
+            )
+
+        return hits
+
+    except Exception as e:
+        logger.exception(f"Failed to search docs: {str(e)}")
+        raise
 
 
 async def embed_docs():
     try:
-        # Initialize vecs client
-        vx = vecs.create_client(DB_CONNECTION)
-        logger.info("Connected to vector DB")
+        # Initialize Qdrant client with persistent storage
+        client = QdrantClient(path="docs/vector_db")
+        logger.info("Connected to Qdrant DB")
 
-        # Create or get collection for docs
-        docs = vx.get_or_create_collection(name="docs", dimension=EMBEDDING_DIM)
-        logger.info("Created/got docs collection")
+        # Create collection if it doesn't exist
+        try:
+            client.get_collection(COLLECTION_NAME)
+        except (
+            ValueError,
+            KeyError,
+        ):  # Qdrant raises these when collection doesn't exist
+            client.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=VectorParams(
+                    size=EMBEDDING_DIM, distance=Distance.COSINE
+                ),
+            )
+            logger.info(f"Created new collection: {COLLECTION_NAME}")
+        else:
+            logger.info(f"Using existing collection: {COLLECTION_NAME}")
 
         # Get all MD files recursively including subdirectories
         docs_dir = Path(__file__).parent.parent / "docs"
         md_files = []
-        for pattern in [
-            "*.md",
-            "*/*.md",
-            "*/*/*.md",
-        ]:  # Handle root, api/, and api/subdirs/
+        for pattern in ["*.md", "*/*.md", "*/*/*.md"]:
             md_files.extend(docs_dir.glob(pattern))
-        md_files = sorted(set(md_files))  # Remove duplicates and sort
+        md_files = sorted(set(md_files))
         logger.info(
             f"Found {len(md_files)} markdown files in {docs_dir} and subdirectories"
         )
@@ -38,81 +129,72 @@ async def embed_docs():
         # Main progress bar for files
         for md_file in tqdm(md_files, desc="Processing files", unit="file"):
             try:
-                # Read full content first
                 full_content = md_file.read_text(encoding="utf-8")
                 chunks = chunk_markdown(full_content)
                 logger.info(f"Processing {md_file.name} in {len(chunks)} chunks")
 
-                # Nested progress bar for chunks
-                chunk_pbar = tqdm(
-                    total=len(chunks),
-                    desc=f"Chunks of {md_file.name}",
-                    unit="chunk",
-                    leave=False,
-                )
-                for i, chunk in enumerate(chunks):
+                points = []
+                for i, chunk in enumerate(
+                    tqdm(
+                        chunks,
+                        desc=f"Chunks of {md_file.name}",
+                        unit="chunk",
+                        leave=False,
+                    )
+                ):
                     try:
-                        # Get context for chunk
                         contextialzed_chunk, usage = await situate_context(
                             full_content, chunk
                         )
                         logger.debug(f"Context generation usage: {usage} for chunk {i}")
 
                         text_to_embed = f"{chunk}\n\n{contextialzed_chunk}"
-
-                        # Generate embedding for chunk
                         embedding = await generate_embeddings(text_to_embed)
 
-                        # Verify embedding dimension
                         if len(embedding) != EMBEDDING_DIM:
                             raise ValueError(
                                 f"Expected embedding dimension {EMBEDDING_DIM}, got {len(embedding)}"
                             )
 
-                        # Each chunk gets its own record with unique ID
                         rel_path = md_file.relative_to(docs_dir)
                         chunk_id = (
                             f"{rel_path}#chunk{i}" if len(chunks) > 1 else str(rel_path)
                         )
 
-                        # Store in vector DB
-                        docs.upsert(
-                            records=[
-                                (
-                                    chunk_id,
-                                    embedding,  # API returns vector directly
-                                    {
-                                        "filename": md_file.name,
-                                        "filepath": str(rel_path),
-                                        "chunk_index": i,
-                                        "total_chunks": len(chunks),
-                                        "original_content": chunk,
-                                        "contextualized_content": contextialzed_chunk,
-                                    },
-                                )
-                            ]
+                        points.append(
+                            PointStruct(
+                                id=chunk_id,
+                                vector=embedding,
+                                payload={
+                                    "filename": md_file.name,
+                                    "filepath": str(rel_path),
+                                    "chunk_index": i,
+                                    "total_chunks": len(chunks),
+                                    "original_content": chunk,
+                                    "contextualized_content": contextialzed_chunk,
+                                },
+                            )
                         )
-                        logger.success(
-                            f"Embedded {md_file.name} chunk {i + 1}/{len(chunks)}"
+                        logger.debug(
+                            f"Prepared chunk {i + 1}/{len(chunks)} for embedding"
                         )
-                        chunk_pbar.update(1)
+
                     except Exception as e:
                         logger.error(
                             f"Failed to process chunk {i} of {md_file.name}: {str(e)}"
                         )
                         continue
-                chunk_pbar.close()
+
+                # Batch upsert points for this file
+                if points:
+                    client.upsert(collection_name=COLLECTION_NAME, points=points)
+                    logger.success(f"Embedded {len(points)} chunks from {md_file.name}")
+
             except Exception as e:
                 logger.error(f"Failed to process file {md_file.name}: {str(e)}")
                 continue
 
-        # Create index for faster queries
-        docs.create_index()
-        logger.success("Created vector index")
-
-        # Cleanup
-        vx.disconnect()
-        logger.info("Disconnected from vector DB")
+        logger.success("Completed embedding all documents")
 
     except Exception as e:
         logger.exception(f"Failed to embed docs: {str(e)}")

@@ -11,7 +11,7 @@ MXBAI_RERANK_URL = (
     "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-rerank-base-v1"
 )
 MXBAI_HEADERS = {"Authorization": f"Bearer {os.getenv('HUGGINGFACE_TOKEN')}"}
-DB_CONNECTION = os.getenv("DB_CONNECTION")
+COLLECTION_NAME = "docs"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 DOCUMENT_CONTEXT_PROMPT = """
