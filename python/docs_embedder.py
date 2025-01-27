@@ -1,5 +1,7 @@
 import asyncio
 from pathlib import Path
+import argparse
+import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -14,6 +16,9 @@ from qdrant_client.models import (
 )
 from loguru import logger
 from tqdm import tqdm
+from rich.console import Console
+from rich.table import Table
+from rich import box
 from utils import generate_embeddings, chunk_markdown, situate_context
 from config import COLLECTION_NAME, EMBEDDING_DIM
 from typing import List, Dict, Optional, Union, cast
@@ -157,15 +162,16 @@ async def embed_docs():
                             )
 
                         rel_path = md_file.relative_to(docs_dir)
-                        chunk_id = (
+                        readable_id = (
                             f"{rel_path}#chunk{i}" if len(chunks) > 1 else str(rel_path)
                         )
 
                         points.append(
                             PointStruct(
-                                id=chunk_id,
+                                id=str(uuid.uuid4()),
                                 vector=embedding,
                                 payload={
+                                    "file_id": readable_id,
                                     "filename": md_file.name,
                                     "filepath": str(rel_path),
                                     "chunk_index": i,
@@ -201,6 +207,59 @@ async def embed_docs():
         raise
 
 
+async def main():
+    parser = argparse.ArgumentParser(description="Embed and search documentation")
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # Embed command
+    subparsers.add_parser("embed", help="Embed documentation")
+
+    # Search command
+    search_parser = subparsers.add_parser("search", help="Search documentation")
+    search_parser.add_argument("query", help="Search query")
+    search_parser.add_argument("--limit", type=int, default=5, help="Number of results")
+    search_parser.add_argument("--filepath", help="Filter by filepath")
+    search_parser.add_argument("--chunk-index", type=int, help="Filter by chunk index")
+
+    args = parser.parse_args()
+
+    if args.command == "embed":
+        await embed_docs()
+    elif args.command == "search":
+        filter_conditions = {}
+        if args.filepath:
+            filter_conditions["filepath"] = args.filepath
+        if args.chunk_index is not None:
+            filter_conditions["chunk_index"] = args.chunk_index
+
+        results = await search_docs(
+            query=args.query,
+            limit=args.limit,
+            filter_conditions=filter_conditions if filter_conditions else None,
+        )
+
+        console = Console()
+        table = Table(
+            show_header=True,
+            header_style="bold magenta",
+            box=box.ROUNDED,
+            title=f"[bold cyan]Search Results for: [yellow]'{args.query}'[/yellow] ({len(results)} hits)[/bold cyan]",
+        )
+
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Score", justify="right", width=8)
+        table.add_column("File", style="green")
+        table.add_column("Content", width=80, no_wrap=False)
+
+        for i, hit in enumerate(results, 1):
+            content = hit["content"][:200] + "..." if hit["content"] else "N/A"
+            table.add_row(str(i), f"{hit['score']:.3f}", hit["filepath"], content)
+
+        console.print("\n")
+        console.print(table)
+        console.print("\n")
+
+
 if __name__ == "__main__":
     logger.add("docs_embedder.log", rotation="100 MB")
-    asyncio.run(embed_docs())
+    asyncio.run(main())

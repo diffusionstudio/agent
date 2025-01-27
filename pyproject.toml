@@ -12,5 +12,6 @@ dependencies = [
     "pre-commit>=4.1.0",
     "python-dotenv>=1.0.1",
     "qdrant-client>=1.13.2",
+    "rich>=13.9.4",
     "tqdm>=4.67.1",
 ]

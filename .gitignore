@@ -1,6 +1,7 @@
 __pycache__
 **/output/*
 python/output/**
+python/docs/vector_db/*
 .python-version
 .env
 **/*.log
