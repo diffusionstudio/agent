@@ -7,9 +7,9 @@ This guide provides a comprehensive overview of manipulating videos and exportin
 To add a video, you need a `VideoClip` and a `VideoSource`. You can create a `VideoSource` from a file or an external URL. Here, we will use a URL:
 
 ```typescript
-import { VideoSource } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const source = await VideoSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/videos/big_buck_bunny_1080p_30fps.mp4');
+const source = await core.VideoSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/videos/big_buck_bunny_1080p_30fps.mp4');
 ```
 
 A `VideoSource` is a reusable reference that can be shared across multiple clips, optimizing memory usage.
@@ -19,9 +19,9 @@ A `VideoSource` is a reusable reference that can be shared across multiple clips
 Now, create a `VideoClip` from the `VideoSource`:
 
 ```typescript
-import { VideoClip } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const video = new VideoClip(source, { // also accepts new File(...)
+const video = new core.VideoClip(source, { // also accepts new File(...)
   position: 'center', // ensures the clip is centered
   height: '100%', // stretches the clip to the full height
   width: '100%', // stretches the clip to the full width
@@ -74,15 +74,13 @@ composition.on('currentframe', console.log); // log frame events
 To export the composition, use the `Encoder`:
 
 ```typescript
-import { Encoder } from '@diffusionstudio/core';
-
-const encoder = new Encoder(composition);
+const encoder = new core.Encoder(composition);
 ```
 
 You can customize the render settings with the second argument of the `Encoder` constructor. For example, to render at 4K resolution and 25 FPS:
 
 ```typescript
-const encoder = new Encoder(composition, { resolution: 2, fps: 25 });
+const encoder = new core.Encoder(composition, { resolution: 2, fps: 25 });
 ```
 
 Export the video with the `render` method:
@@ -111,29 +109,19 @@ await encoder.render(fileHandle);
 
 This writes the MP4 chunks directly to disk, allowing the export of large files while consuming minimal RAM.
 
-### Browser Compatibility Fallback
-
-If `showSaveFilePicker` is unavailable, use this fallback snippet:
-
-```typescript
-if (!('showSaveFilePicker' in window)) {
-  Object.assign(window, { showSaveFilePicker: async () => undefined });
-}
-```
-
 ### Full Example
 
 Here is a complete example putting everything together:
 
 ```typescript
-import { Composition, VideoSource, VideoClip, Encoder } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const composition = new Composition();
+const composition = new core.Composition();
 
 const player = document.getElementById('player') as HTMLDivElement;
 composition.attachPlayer(player);
 
-const source = await VideoSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/videos/big_buck_bunny_1080p_30fps.mp4');
+const source = await core.VideoSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/videos/big_buck_bunny_1080p_30fps.mp4');
 
 const video = new VideoClip(source, {
     position: 'center',
@@ -145,6 +133,6 @@ const video = new VideoClip(source, {
 
 await composition.add(video);
 
-const encoder = new Encoder(composition, { resolution: 2, fps: 25 });
+const encoder = new core.Encoder(composition, { resolution: 2, fps: 25 });
 await encoder.render('myVideo.mp4');
 ```

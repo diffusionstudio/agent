@@ -27,15 +27,15 @@ Now you can start hacking!
 ## Enjoy!
 
 ```typescript
-import { TextClip, Composition, Encoder } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const text = new TextClip({
+const text = new core.TextClip({
   text: 'Hello World', 
   position: 'center' 
 }); 
 
-const composition = new Composition();            // create root object
+const composition = new core.Composition();            // create root object
 await composition.add(text);                      // render text
 
-const blob = await new Encoder(composition).render();
+const blob = await new core.Encoder(composition).render();
 ```

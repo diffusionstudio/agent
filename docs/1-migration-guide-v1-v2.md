@@ -30,10 +30,10 @@ This guide outlines the changes and steps required to migrate from Diffusion Stu
 
 Example of using new shape components:
 ```typescript
-import { RectangleClip, ShapeTrack } from '@diffusionstudio/core'
+import * as core from '@diffusionstudio/core'
 
-const shapeTrack = new ShapeTrack()
-const rectangle = new RectangleClip({
+const shapeTrack = new core.ShapeTrack()
+const rectangle = new core.RectangleClip({
   width: 100,
   height: 100,
   fill: '#ff0000',
@@ -64,12 +64,12 @@ await shapeTrack.add(rectangle)
 Example of updated composition usage:
 ```typescript
 // V1
-const composition = new Composition()
+const composition = new core.Composition()
 composition.attachPlayer(element)
 composition.shiftTrack(track)
 
 // V2
-const composition = new Composition()
+const composition = new core.Composition()
 composition.mount(element)
 composition.insertTrack(track) // Accepts position as second argument
 ```
@@ -121,8 +121,8 @@ const captions = await captionTrack.from(audioClip).createCaptions()
 Example of animation changes:
 ```typescript
 // V1 - Individual keyframes per property
-clip.x = new Keyframe([80], [960])
-clip.width = new Keyframe([60], [1000])
+clip.x = new core.Keyframe([80], [960])
+clip.width = new core.Keyframe([60], [1000])
 
 // V2 - Centralized animations array
 clip.animations = [
@@ -214,14 +214,14 @@ await mediaClip.createCaptions()
 Example of font management:
 ```typescript
 // V1
-const font = await Font.load({
+const font = await core.Font.load({
   family: 'Arial',
   weight: 400,
   source: 'arial.ttf'
 })
 
 // V2
-const fontManager = new FontManager()
+const fontManager = new core.FontManager()
 const font = await fontManager.load({
   family: 'Arial',
   weight: 400,
@@ -230,7 +230,7 @@ const font = await fontManager.load({
 
 // or
 
-const font = FontManager.load({
+const font = core.FontManager.load({
   family: 'Arial',
   weight: 400,
   source: 'arial.ttf'

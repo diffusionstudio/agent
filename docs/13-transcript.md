@@ -17,9 +17,13 @@ The JSON structure is a 3-dimensional array, where the first level represents se
 To create a `Transcript` from this JSON, use the following:
 
 ```typescript
-import { Transcript } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const transcript = Transcript.fromJSON(captions); // `captions` is of type Captions
+const transcript = core.Transcript.fromJSON(captions); // `captions` is of type Captions
+
+// or
+
+const transcript = await core.Transcript.from('https://.../captions.json'); // to load from a remote JSON file
 ```
 
 ### Manual Construction
@@ -27,12 +31,12 @@ const transcript = Transcript.fromJSON(captions); // `captions` is of type Capti
 You can also manually create a `Transcript` instance:
 
 ```typescript
-import { Transcript, WordGroup, Word } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const transcript = new Transcript(
-  new WordGroup(
-    new Word('Hello', 0, 300),
-    new Word('World', 320, 600),
+const transcript = new core.Transcript(
+  new core.WordGroup(
+    new core.Word('Hello', 0, 300),
+    new core.Word('World', 320, 600),
   )
 );
 ```

@@ -35,15 +35,15 @@ This method is called after the `Clip` has been drawn to the canvas for the last
 This example is inspired by the [Pixi.js Texture Swap](https://pixijs.com/8.x/playground?exampleId=sprite.textureSwap) guide. You can refer to it for additional insights.
 
 ```typescript
-import { ClipProps, Clip, Timestamp, Renderer } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
 // Define custom Clip properties extending `ClipProps`, such as start, stop, etc.
-interface AlienClipProps extends ClipProps {
+interface AlienClipProps extends core.ClipProps {
   speed?: number;  // Optional speed property
 }
 
 // Create a new class extending `Clip` and apply your custom properties
-class AlienClip extends Clip {
+class AlienClip extends core.Clip {
   // Declare custom fields
   public speed = 0.2;
   public image = new Image();
@@ -69,11 +69,11 @@ class AlienClip extends Clip {
   }
 
   // Update the clip's state on each frame. Receives a `Timestamp` argument.
-  public override update(renderer: Renderer, time: Timestamp): void | Promise<void> {
+  public override update(renderer: core.Renderer, time: core.Timestamp): void | Promise<void> {
     // This can be useful for computationally expensive operations.
   }
 
-  public override render(renderer: Renderer, time: Timestamp): void {
+  public override render(renderer: core.Renderer, time: core.Timestamp): void {
     const x = this.track!.composition!.width / 2;
     const y = this.track!.composition!.height / 2;
 
@@ -99,9 +99,7 @@ class AlienClip extends Clip {
 To include this `AlienClip` in a composition, you can do the following:
 
 ```typescript
-import { Composition } from '@diffusionstudio/core';
-
-const composition = new Composition();
+const composition = new core.Composition();
 
 // Add the custom AlienClip to the composition
 await composition.add(new AlienClip({ speed: 0.4, duration: 150 }));

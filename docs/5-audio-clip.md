@@ -7,11 +7,11 @@ This guide will walk you through the steps of splitting an audio file into multi
 First, let's fetch an MP3 file of a piano recording and create an audio clip from it:
 
 ```typescript
-import { AudioSource, AudioClip } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const source = await AudioSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/audio/piano.mp3');
+const source = await core.AudioSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/audio/piano.mp3');
 
-const clip0 = await composition.add(new AudioClip(source));
+const clip0 = await composition.add(new core.AudioClip(source));
 ```
 
 > **Hint:** The MP3 file contains 16 seconds of audio.
@@ -84,9 +84,7 @@ With the stacked track approach, the offsets are automatically handled, making i
 The `AudioClip` (and `VideoClip`) also makes it easy to add captions to your composition. Let's see this in action:
 
 ```typescript
-import { Transcript } from '@diffusionstudio/core';
-
-clip0.transcript = new Transcript(); // Assume this is populated with data
+clip0.transcript = new core.Transcript(); // Assume this is populated with data
 
 await clip0.createCaptions();
 ```

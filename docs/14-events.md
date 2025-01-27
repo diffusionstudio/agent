@@ -5,7 +5,7 @@ Diffusion Studio is built around an event-driven architecture, making it essenti
 In Diffusion Studio, the **Composition** emits various events related to playback control, similar to those found in many editing applications:
 
 ```typescript
-const composition = new Composition();
+const composition = new core.Composition();
 
 composition.on('currentframe', (event) => {
   // Logs the current frame of the playback

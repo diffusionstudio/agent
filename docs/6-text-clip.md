@@ -3,14 +3,14 @@
 Here is a basic example of how to style text clips:
 
 ```typescript
-import { TextClip, FontManager } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const font = await FontManager.load({ 
+const font = await core.FontManager.load({ 
   family: 'Geologica', 
   weight: '400',
 });
 
-const text = new TextClip({
+const text = new core.TextClip({
   text: 'Hello World',
   align: 'center',
   baseline: 'middle',
@@ -37,7 +37,7 @@ const text = new TextClip({
 We have loaded the web font from a predefined set of popular web fonts. You can also use custom web fonts like this:
 
 ```typescript
-const manager = new FontManager();
+const manager = new core.FontManager();
 
 const roboto = await manager.load({
   source: "https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmSU5fBBc4AMP6lQ.woff2",
@@ -55,9 +55,7 @@ Setting the `align` and `baseline` properties will adjust the anchor point, comp
 We have tested various methods to render text with differently styled subsections, such as changing the color of a particular word. While Pixi.js `HTMLText` was a promising solution, the quality of the text did not meet our standards. We ultimately implemented our own solution using foreignObjects. Although visually satisfying, the performance was inadequate for production use. We reverted to a 2D context implementation, resulting in the current state.
 
 ```typescript
-import { ComplexTextClip } from '@diffusionstudio/core';
-
-const font = await FontManager.load({ 
+const font = await core.FontManager.load({ 
   family: 'Geologica', 
   weight: '800',
 });

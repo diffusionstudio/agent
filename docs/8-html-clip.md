@@ -39,9 +39,9 @@ Your HTML must follow a strict layout. Ensure that your entire markup is wrapped
 To load the `HtmlSource`, use the following code:
 
 ```typescript
-import { HtmlSource } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const source = await HtmlSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/html/sample_html.html');
+const source = await core.HtmlSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/html/sample_html.html');
 ```
 
 Diffusion Studio will interpret the contents by opening the HTML inside an IFrame, allowing you to manipulate the DOM of the source:
@@ -55,9 +55,9 @@ source.document!.querySelector('span')!.textContent = 'Manipulated Text Content'
 Construct a `HtmlClip` from your source with the following code:
 
 ```typescript
-import { HtmlClip } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const html = new HtmlClip(source, { position: 'center' });
+const html = new core.HtmlClip(source, { position: 'center' });
 
 await composition.add(html);
 ```

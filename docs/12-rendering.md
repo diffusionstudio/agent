@@ -5,17 +5,15 @@ Rendering videos on the client side is made highly efficient by utilizing WebCod
 To begin, you'll need a `Composition` to render. Below is an example of setting up an empty `Composition` for demonstration purposes:
 
 ```typescript
-import { Composition } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const composition = new Composition();
+const composition = new core.Composition();
 ```
 
 Next, create an encoder using the `Composition`:
 
 ```typescript
-import { Encoder } from '@diffusionstudio/core';
-
-const encoder = new Encoder(composition);
+const encoder = new core.Encoder(composition);
 ```
 
 ## Configuring the Encoder
@@ -31,13 +29,14 @@ The encoder can be customized via its second argument, which allows you to confi
   gpuBatchSize: 5,      // Defines the workload for the GPU.
   fps: 30,              // Sets the output frame rate.
   debug: false,         // Enables logging of rendering performance.
+  watermark: string,    // Adds a simple text watermark to the video.
 }
 ```
 
 For example, to produce a 4K video at 60 FPS from a default 1080p `Composition`, you can configure the encoder like this:
 
 ```typescript
-const encoder = new Encoder(composition, {
+const encoder = new core.Encoder(composition, {
   fps: 60,
   resolution: 2,
 });
@@ -75,7 +74,7 @@ To ensure compatibility across browsers, you can provide a fallback for `showSav
 
 ```typescript
 if (!('showSaveFilePicker' in window)) {
-  Object.assign(window, { showSaveFilePicker: async () => undefined });
+  Object.assign(window, { showSaveFilePicker: async () => 'myVideo.mp4' });
 }
 ```
 

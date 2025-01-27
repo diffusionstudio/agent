@@ -3,11 +3,11 @@ The `Timestamp` object is used to manage the connection between frames and milli
 You can also use the `Timestamp` externally for higher precision if your application requires it, like this:
 
 ```typescript
-import { Timestamp, ImageClip } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const timestamp = new Timestamp(1000); // in milliseconds
+const timestamp = new core.Timestamp(1000); // in milliseconds
 
-new ImageClip({ stop: timestamp });
+new core.ImageClip({ stop: timestamp });
 
 timestamp.frames;  // 30
 timestamp.millis;  // 1000

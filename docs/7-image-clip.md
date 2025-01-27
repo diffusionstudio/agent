@@ -3,11 +3,11 @@ The `ImageClip` class, like all static clips (excluding Video & Audio), has a fi
 ## Basic Usage
 
 ```typescript
-import { ImageSource, ImageClip } from '@diffusionstudio/core';
+import * as core from '@diffusionstudio/core';
 
-const source = await ImageSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/images/lenna.png');
+const source = await core.ImageSource.from('https://diffusion-studio-public.s3.eu-central-1.amazonaws.com/images/lenna.png');
 
-const image = new ImageClip(source, { delay: 20, duration: 100 });
+const image = new core.ImageClip(source, { delay: 20, duration: 100 });
 
 await composition.add(image);
 ```
