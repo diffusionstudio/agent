@@ -26,15 +26,43 @@ def clear_file_path(output: str):
 
 
 def chunk_markdown(content: str, max_lines: int = 100) -> list[str]:
-    """Split markdown into chunks of max_lines if needed."""
+    """
+    Split markdown into chunks of max_lines, preserving code blocks.
+    Won't split in the middle of a code block.
+    """
     lines = content.splitlines()
     if len(lines) <= max_lines:
         return [content]
 
     chunks = []
-    for i in range(0, len(lines), max_lines):
-        chunk = "\n".join(lines[i : i + max_lines])
-        chunks.append(chunk)
+    current_chunk = []
+    current_size = 0
+    in_code_block = False
+    code_fence = ""
+
+    for line in lines:
+        # Detect code block boundaries
+        if line.startswith("```"):
+            if not in_code_block:  # Start of code block
+                in_code_block = True
+                code_fence = line
+            elif line.startswith(code_fence):  # End of code block
+                in_code_block = False
+                code_fence = ""
+
+        current_chunk.append(line)
+        current_size += 1
+
+        # Create new chunk if we hit max size and we're not in a code block
+        if current_size >= max_lines and not in_code_block:
+            chunks.append("\n".join(current_chunk))
+            current_chunk = []
+            current_size = 0
+
+    # Add remaining lines
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+
     return chunks
 
 
