@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "playwright>=1.49.1",
+    "pre-commit>=4.1.0",
     "python-dotenv>=1.0.1",
     "tqdm>=4.67.1",
     "vecs>=0.4.5",
