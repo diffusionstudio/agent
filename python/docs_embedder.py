@@ -19,15 +19,17 @@ from tqdm import tqdm
 from rich.console import Console
 from rich.table import Table
 from rich import box
-from utils import generate_embeddings, chunk_markdown, situate_context
+from rich.markdown import Markdown
+from utils import generate_embeddings, chunk_markdown, situate_context, rerank
 from config import COLLECTION_NAME, EMBEDDING_DIM
-from typing import List, Dict, Optional, Union, cast
+from typing import List, Dict, Optional, Union
 
 
 async def search_docs(
     query: str,
     limit: int = 5,
     filter_conditions: Optional[Dict[str, Union[str, int, float, List[str]]]] = None,
+    rerank_results: bool = False,
 ) -> List[Dict]:
     """
     Search for similar documents using a text query.
@@ -37,19 +39,24 @@ async def search_docs(
         limit: Number of results to return
         filter_conditions: Optional dict of field conditions for filtering
             Example: {"filepath": "api/classes/", "chunk_index": 0}
+        rerank_results: Whether to apply semantic reranking (slower but more accurate)
 
     Returns:
         List of matching documents with scores and metadata
     """
     try:
+        logger.info(f"Starting search for query: '{query}'")
         client = QdrantClient(path="docs/vector_db")
+        logger.debug("Connected to vector DB")
 
         # Generate embedding for query
         query_embedding = await generate_embeddings(query)
+        logger.debug(f"Generated query embedding of size {len(query_embedding)}")
 
         # Build filter if conditions provided
         search_filter = None
         if filter_conditions:
+            logger.info(f"Applying filters: {filter_conditions}")
             must_conditions = []
             for field, value in filter_conditions.items():
                 if isinstance(value, (int, float)):
@@ -67,22 +74,38 @@ async def search_docs(
 
             if must_conditions:
                 search_filter = Filter(must=must_conditions)
+                logger.debug(f"Created filter with {len(must_conditions)} conditions")
 
-        # Execute search
-        results = client.query_points(
+        # Get results (more if we're going to rerank)
+        vector_limit = min(limit * 3, 20) if rerank_results else limit
+        logger.info(
+            f"Fetching top {vector_limit} results{' for reranking' if rerank_results else ''}"
+        )
+        search_results = client.query_points(
             collection_name=COLLECTION_NAME,
             query=query_embedding,
             query_filter=search_filter,
-            limit=limit,
+            limit=vector_limit,
         )
 
-        # Format results
+        # Format initial results
         hits = []
-        for scored_point in cast(List[ScoredPoint], results):
-            payload = scored_point.payload or {}
+        if search_results and hasattr(search_results, "points"):
+            points = search_results.points
+            logger.info(f"Found {len(points)} initial matches")
+        else:
+            points = []
+            logger.warning("No initial matches found")
+
+        for point in points:
+            if not isinstance(point, ScoredPoint):
+                logger.warning(f"Skipping result with unexpected type: {type(point)}")
+                continue
+
+            payload = point.payload or {}
             hits.append(
                 {
-                    "score": scored_point.score,
+                    "score": float(point.score),
                     "content": payload.get("original_content"),
                     "context": payload.get("contextualized_content"),
                     "filepath": payload.get("filepath"),
@@ -90,6 +113,46 @@ async def search_docs(
                     "total_chunks": payload.get("total_chunks"),
                 }
             )
+            logger.debug(
+                f"Added hit from {payload.get('filepath')} with score {point.score:.3f}"
+            )
+
+        if hits and rerank_results:
+            # Rerank results
+            logger.info("Reranking results...")
+            docs_to_rerank = [hit["content"] for hit in hits if hit["content"]]
+            logger.debug(f"Reranking {len(docs_to_rerank)} documents")
+
+            rerank_scores = await rerank(query=query, documents=docs_to_rerank)
+            logger.debug(f"Got {len(rerank_scores)} rerank scores")
+            logger.debug(
+                f"Sample rerank result: {rerank_scores[0] if rerank_scores else None}"
+            )
+
+            # Combine vector similarity and rerank scores (70-30 split)
+            for hit, rerank_result in zip(hits, rerank_scores):
+                # Each rerank result is a list of dictionaries, take first one's score
+                rerank_dict = (
+                    rerank_result[0]
+                    if isinstance(rerank_result, list)
+                    else rerank_result
+                )
+                rerank_score = float(rerank_dict.get("score", 0.0))
+                old_score = hit["score"]
+                hit["score"] = 0.7 * old_score + 0.3 * rerank_score
+                logger.debug(
+                    f"Combined scores for {hit['filepath']}: "
+                    f"vector={old_score:.3f}, rerank={rerank_score:.3f}, "
+                    f"final={hit['score']:.3f}"
+                )
+
+            # Sort by combined score and limit results
+            hits = sorted(hits, key=lambda x: x["score"], reverse=True)[:limit]
+            logger.info(f"Returning top {len(hits)} results after reranking")
+        else:
+            # Just take top N results from vector search
+            hits = hits[:limit]
+            logger.info(f"Returning top {len(hits)} results from vector search")
 
         return hits
 
@@ -233,6 +296,16 @@ async def main():
     search_parser.add_argument("--limit", type=int, default=5, help="Number of results")
     search_parser.add_argument("--filepath", help="Filter by filepath")
     search_parser.add_argument("--chunk-index", type=int, help="Filter by chunk index")
+    search_parser.add_argument(
+        "--rerank",
+        action="store_true",
+        help="Apply semantic reranking (slower but more accurate)",
+    )
+    search_parser.add_argument(
+        "--full-content",
+        action="store_true",
+        help="Show full content instead of truncated version",
+    )
 
     args = parser.parse_args()
 
@@ -249,6 +322,7 @@ async def main():
             query=args.query,
             limit=args.limit,
             filter_conditions=filter_conditions if filter_conditions else None,
+            rerank_results=args.rerank,
         )
 
         console = Console()
@@ -257,16 +331,44 @@ async def main():
             header_style="bold magenta",
             box=box.ROUNDED,
             title=f"[bold cyan]Search Results for: [yellow]'{args.query}'[/yellow] ({len(results)} hits)[/bold cyan]",
+            show_lines=True,
         )
 
         table.add_column("#", style="dim", width=4)
-        table.add_column("Score", justify="right", width=8)
-        table.add_column("File", style="green")
-        table.add_column("Content", width=80, no_wrap=False)
+        table.add_column("Score", justify="right", width=4)
+        table.add_column("File", style="green", width=4)
+        table.add_column("Section", justify="center", width=4)
+        table.add_column("Content", ratio=1, no_wrap=args.full_content)
 
         for i, hit in enumerate(results, 1):
-            content = hit["content"][:200] + "..." if hit["content"] else "N/A"
-            table.add_row(str(i), f"{hit['score']:.3f}", hit["filepath"], content)
+            content = hit["content"] or "N/A"
+            if not args.full_content:
+                content = content[:200] + "..." if len(content) > 200 else content
+
+            # Format content as markdown with code highlighting
+            content_md = Markdown(
+                content, code_theme="monokai", inline_code_theme="monokai"
+            )
+
+            # Add context if available
+            if hit["context"] and args.full_content:
+                context_md = Markdown(
+                    f"\n**Context:**\n{hit['context']}",
+                    code_theme="monokai",
+                    inline_code_theme="monokai",
+                )
+                content_md = f"{content_md}\n{context_md}"
+
+            # Show section info (e.g., "Part 1/3")
+            section_info = (
+                f"Part {hit['chunk_index'] + 1}/{hit['total_chunks']}"
+                if hit["chunk_index"] is not None and hit["total_chunks"] > 1
+                else "Full Doc"
+            )
+
+            table.add_row(
+                str(i), f"{hit['score']:.3f}", hit["filepath"], section_info, content_md
+            )
 
         console.print("\n")
         console.print(table)
