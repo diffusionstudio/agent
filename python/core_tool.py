@@ -13,7 +13,10 @@ class VideoEditorTool(Tool):
     Note: Documentation examples are in TypeScript - remove type annotations before using.
 
     Common operations:
-    - Subclipping: video.subclip(start, end)
+    - Clipping: video.subclip(start_frame, end_frame)
+    - Offsetting: video.offset(offset_frames)
+    - Trimming: image.trim(start_frame, end_frame)
+    - Splitting: video.split(split_frames)
     - Adding to timeline: composition.add(clip)
     - Rendering: await render()
 
@@ -90,11 +93,6 @@ class VideoEditorTool(Tool):
             self.page = await self.browser.new_page()
             logger.debug("Created new page")
 
-            logger.info(f"Pre-allocating output file: {self.output}")
-            with open(self.output, "wb") as f:
-                f.truncate(1024 * 1024 * 100)  # 100MB pre-allocation
-            logger.debug("Output file pre-allocated")
-
             logger.info("Loading editor interface...")
             await self.page.goto("https://operator-ui.vercel.app")
             await self.page.wait_for_function("typeof window.core !== 'undefined'")
@@ -146,8 +144,8 @@ class VideoEditorTool(Tool):
         self,
         assets: list[str] = ["assets/big_buck_bunny_1080p_30fps.mp4"],
         js_code: str = """
-        // Default example: Create a 150 second subclip
-        const [videoFile] = files();
+        // Default example: Create a 150 frames subclip
+        const videoFile = assets()[0];
         const video = new core.VideoClip(videoFile).subclip(0, 150);
         await composition.add(video);
         await render();
