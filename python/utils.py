@@ -144,7 +144,7 @@ async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RET
         raise RuntimeError(f"{error_msg}: {str(last_error)}")
 
 
-async def rerank(query: str, documents: list[str], timeout=30):
+async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRIES):
     """
     Rerank documents based on relevance to query using MXBAI reranking API.
 
@@ -152,26 +152,59 @@ async def rerank(query: str, documents: list[str], timeout=30):
         query (str): The query text to compare documents against
         documents (list[str]): List of document texts to rerank
         timeout (int, optional): Request timeout in seconds. Defaults to 30.
+        retries (int, optional): Number of retries on failure. Defaults to MAX_RETRIES.
 
     Returns:
         list[float]: List of relevance scores between 0 and 1 for each document
 
     Raises:
-        TimeoutError: If request times out
-        RuntimeError: If request fails for any other reason
+        TimeoutError: If request times out after all retries
+        RuntimeError: If request fails for any other reason after all retries
     """
-    try:
-        payload = {"inputs": [{"text": query, "text_pair": doc} for doc in documents]}
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                MXBAI_RERANK_URL, headers=MXBAI_HEADERS, json=payload, timeout=timeout
+    last_error = None
+    for attempt in range(retries):
+        try:
+            payload = {
+                "inputs": [{"text": query, "text_pair": doc} for doc in documents]
+            }
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    MXBAI_RERANK_URL,
+                    headers=MXBAI_HEADERS,
+                    json=payload,
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.TimeoutException as e:
+            last_error = e
+            logger.warning(f"Timeout during reranking attempt {attempt + 1}: {str(e)}")
+        except httpx.RequestError as e:
+            last_error = e
+            logger.warning(
+                f"Request error during reranking attempt {attempt + 1}: {str(e)}"
             )
-            response.raise_for_status()
-            return response.json()
-    except httpx.TimeoutException:
-        raise TimeoutError("Rerank request timed out")
-    except httpx.HTTPError as e:
-        raise RuntimeError(f"Rerank request failed: {str(e)}")
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                f"Unexpected error during reranking attempt {attempt + 1}: {str(e)}"
+            )
+
+        if attempt < retries - 1:
+            delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
+            logger.warning(
+                f"Reranking attempt {attempt + 1} failed. Retrying in {delay}s..."
+            )
+            await asyncio.sleep(delay)
+            continue
+
+    error_msg = f"Rerank request failed after {retries} attempts"
+    if isinstance(last_error, httpx.TimeoutException):
+        raise TimeoutError(f"{error_msg}: Timeout - {str(last_error)}")
+    elif isinstance(last_error, httpx.RequestError):
+        raise RuntimeError(f"{error_msg}: Request failed - {str(last_error)}")
+    else:
+        raise RuntimeError(f"{error_msg}: {str(last_error)}")
 
 
 async def situate_context(

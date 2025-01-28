@@ -8,7 +8,7 @@ MXBAI_API_URL = (
 )
 EMBEDDING_DIM = 1024  # Dimension of embeddings from https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/blob/main/config.json#L11
 MXBAI_RERANK_URL = (
-    "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-rerank-base-v1"
+    "https://api-inference.huggingface.co/models/mixedbread-ai/mxbai-rerank-xsmall-v1"
 )
 HF_API_KEY = os.getenv("HUGGINGFACE_TOKEN")
 MXBAI_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
