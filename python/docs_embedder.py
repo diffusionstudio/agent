@@ -23,7 +23,6 @@ from rich import box
 from rich.markdown import Markdown
 from utils import (
     generate_embeddings,
-    situate_context,
     rerank,
     print_results,
     print_comparison,
@@ -343,53 +342,91 @@ async def auto_embed_pipeline(
         else:
             logger.info(f"Split content into {len(chunks)} chunks")
 
-        # Process each chunk
+        # Process chunks in batches
+        batch_size = 32
         points = []
+        chunks_to_embed = []
+        chunk_metadata = []  # Store metadata for each chunk
+
         for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks")):
             try:
-                # Generate context
-                contextualized_chunk, usage = await situate_context(content, chunk)
-                logger.debug(f"Context generation usage: {usage} for chunk {i}")
+                # Extract filename from chunk if present
+                chunk_lines = chunk.split("\n")
+                filename = None
+                if chunk_lines[0].startswith("File:"):
+                    filename = chunk_lines[0].replace("File:", "").strip()
+                    chunk = "\n".join(chunk_lines[1:]).strip()
 
-                # Generate embedding
-                text_to_embed = f"{chunk}\n\n{contextualized_chunk}"
-                embedding = await generate_embeddings(text_to_embed)
-
-                if len(embedding) != EMBEDDING_DIM:
-                    raise ValueError(
-                        f"Expected embedding dimension {EMBEDDING_DIM}, got {len(embedding)}"
-                    )
-
-                # Create point
-                points.append(
-                    PointStruct(
-                        id=str(uuid.uuid4()),
-                        vector=embedding,
-                        payload={
-                            "file_id": f"url_content#{i}",
-                            "filename": url,
-                            "filepath": url,
-                            "source": url,
-                            "chunk_index": i,
-                            "total_chunks": len(chunks),
-                            "original_content": chunk,
-                            "contextualized_content": contextualized_chunk,
-                        },
-                    )
+                # Store chunk and metadata for batch processing
+                chunks_to_embed.append(chunk)
+                chunk_metadata.append(
+                    {"index": i, "filename": filename or url, "chunk": chunk}
                 )
 
-                # Upload in batches
-                if len(points) >= 32:
+                # Process batch when full
+                if len(chunks_to_embed) >= batch_size:
+                    # Generate embeddings for batch
+                    embeddings = await generate_embeddings(chunks_to_embed)
+
+                    # Create points from embeddings and metadata
+                    for emb, meta in zip(embeddings, chunk_metadata):
+                        points.append(
+                            PointStruct(
+                                id=str(uuid.uuid4()),
+                                vector=emb,
+                                payload={
+                                    "file_id": f"url_content#{meta['index']}",
+                                    "filename": meta["filename"],
+                                    "filepath": meta["filename"],
+                                    "source": url,
+                                    "chunk_index": meta["index"],
+                                    "total_chunks": len(chunks),
+                                    "original_content": meta["chunk"],
+                                },
+                            )
+                        )
+
+                    # Upload batch
                     await upload_points_batch(points)
+
+                    # Clear batches
+                    chunks_to_embed = []
+                    chunk_metadata = []
                     points = []
 
             except Exception as e:
                 logger.error(f"Failed to process chunk {i}: {str(e)}")
                 continue
 
-        # Upload remaining points
-        if points:
-            await upload_points_batch(points)
+        # Process remaining chunks
+        if chunks_to_embed:
+            try:
+                # Generate embeddings for remaining chunks
+                embeddings = await generate_embeddings(chunks_to_embed)
+
+                # Create points from embeddings and metadata
+                for emb, meta in zip(embeddings, chunk_metadata):
+                    points.append(
+                        PointStruct(
+                            id=str(uuid.uuid4()),
+                            vector=emb,
+                            payload={
+                                "file_id": f"url_content#{meta['index']}",
+                                "filename": meta["filename"],
+                                "filepath": meta["filename"],
+                                "source": url,
+                                "chunk_index": meta["index"],
+                                "total_chunks": len(chunks),
+                                "original_content": meta["chunk"],
+                            },
+                        )
+                    )
+
+                # Upload remaining batch
+                if points:
+                    await upload_points_batch(points)
+            except Exception as e:
+                logger.error(f"Failed to process final batch: {str(e)}")
 
         logger.success("Successfully updated content and embeddings")
 
@@ -623,7 +660,19 @@ async def fetch_and_hash_content(url: str) -> tuple[str, str]:
 
 def split_by_separator(content: str, separator: str = "---") -> list[str]:
     """Split content by separator and clean chunks."""
-    chunks = [chunk.strip() for chunk in content.split(separator) if chunk.strip()]
+    chunks = []
+    raw_chunks = [chunk.strip() for chunk in content.split(separator) if chunk.strip()]
+
+    for chunk in raw_chunks:
+        lines = chunk.split("\n")
+        if len(lines) >= 2 and lines[0].startswith("#"):
+            # Extract filename from the markdown header
+            filename = lines[0].replace("#", "").strip()
+            # Combine rest of content
+            content = "\n".join(lines[1:]).strip()
+            if content:  # Only add if there's content after the header
+                chunks.append(f"File: {filename}\n\n{content}")
+
     return chunks
 
 
