@@ -31,14 +31,14 @@ import re
 
 class LLMContentTool(Tool):
     name = "llm_content_tool"
-    description = "A tool that fetches main documentation content from operator-ui.vercel.app/llm.txt"
+    description = "A tool that fetches main documentation content from operator-ui.vercel.app/llms.txt"
     inputs = {}  # No inputs needed since URL is fixed
     output_type = "string"
 
     def forward(self) -> Any:
         """Fetch the documentation content from the fixed URL."""
         try:
-            response = httpx.get("https://operator-ui.vercel.app/llm.txt")
+            response = httpx.get("https://operator-ui.vercel.app/llms.txt")
             response.raise_for_status()
             return response.text
         except httpx.HTTPError as e:
@@ -394,14 +394,29 @@ def normalize_code(text: str) -> str:
     return "\n".join(lines)
 
 
+def normalize_path(path: str) -> str:
+    """Normalize a file path for comparison."""
+    # Convert to Path object and resolve
+    path = Path(path).as_posix()
+    # Remove leading/trailing slashes
+    path = path.strip("/")
+    # Convert to lowercase for case-insensitive comparison
+    return path.lower()
+
+
 async def evaluate_search(
     query: str, reference_file: str, reference_answer: str, use_rerank: bool = False
 ) -> Dict:
     """Evaluate search results for a single query against reference."""
     results = await search_docs(query=query, limit=5, rerank_results=use_rerank)
 
-    # Get referenced file from results
-    found_reference = any(hit["filepath"] == reference_file for hit in results)
+    # Normalize reference path
+    reference_file = normalize_path(reference_file)
+
+    # Get referenced file from results with normalized paths
+    found_reference = any(
+        normalize_path(hit["filepath"]) == reference_file for hit in results
+    )
 
     # Calculate metrics
     metrics = {
@@ -417,7 +432,7 @@ async def evaluate_search(
 
     # Find rank of reference if present
     for i, hit in enumerate(results):
-        if hit["filepath"] == reference_file:
+        if normalize_path(hit["filepath"]) == reference_file:
             metrics["reference_rank"] = i + 1
             metrics["found_content"] = hit["content"]
 
