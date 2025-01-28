@@ -23,12 +23,18 @@ await render();
 
 
 async def init_docs():
-    """Initialize docs collection."""
+    """Initialize docs collection and ensure latest content is embedded."""
     await ensure_collection_exists()
+    # Run auto-embed to ensure latest docs
+    from docs_embedder import auto_embed_pipeline
+
+    await auto_embed_pipeline(
+        url="https://operator-ui.vercel.app/llms.txt", hash_file="docs/content_hash.txt"
+    )
 
 
 def main():
-    # Initialize docs collection
+    # Initialize docs collection and embeddings
     asyncio.run(init_docs())
 
     agent = CodeAgent(
@@ -37,7 +43,7 @@ def main():
         system_prompt=modified_system_prompt,
     )
     agent.run(
-        "Clip big buck bunny to 150 frames, add it to the composition and render the result"
+        "Clip big buck bunny to 150 frames, add it to the composition and render the result, assets/big_buck_bunny_1080p_30fps.mp4"
     )
 
 

@@ -262,9 +262,7 @@ async def auto_embed_pipeline(
     debug: bool = False,
     force: bool = False,
 ):
-    """
-    Automated pipeline to fetch, check hash, and embed content if changed.
-    """
+    """Automated pipeline to fetch, check hash, and embed content if changed."""
     try:
         logger.info(
             f"Starting auto-embed pipeline for {url}{' (DEBUG MODE)' if debug else ''}{' (FORCE UPDATE)' if force else ''}"

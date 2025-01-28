@@ -27,7 +27,7 @@ class VideoEditorTool(Tool):
     inputs = {
         "assets": {
             "type": "array",
-            "description": "List of video assets to process. Default is the Big Buck Bunny sample.",
+            "description": "List of video assets to process. Default is the Big Buck Bunny sample, assets/big_buck_bunny_1080p_30fps.mp4",
             "nullable": False,
         },
         "js_code": {
@@ -59,6 +59,12 @@ class VideoEditorTool(Tool):
             raise ValueError("Output path not set")
 
         try:
+            # Create file if it doesn't exist
+            if not os.path.exists(self.output):
+                with open(self.output, "wb") as f:
+                    pass  # Create empty file
+                logger.debug(f"Created empty output file: {self.output}")
+
             with open(self.output, "r+b") as f:
                 f.seek(position)
                 f.write(bytearray(data))
@@ -113,32 +119,63 @@ class VideoEditorTool(Tool):
             logger.exception(f"Failed to launch editor: {str(e)}")
             raise
 
-    async def evaluate(self, js_code: str):
+    async def evaluate(self, js_code: str, max_retries: int = 3) -> str:
         if not self.page:
             logger.error("Page not initialized when trying to evaluate JavaScript")
             raise ValueError("Page not initialized")
 
-        try:
-            logger.info("Evaluating JavaScript code...")
-            logger.debug(f"JavaScript code:\n{js_code}")
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    f"Evaluating JavaScript code... (attempt {attempt + 1}/{max_retries})"
+                )
+                logger.debug(f"JavaScript code:\n{js_code}")
 
-            result = await self.page.evaluate(f"""
-            async () => {{
-                try {{
-                    {js_code}
-                    return 'success';
-                }} catch (e) {{
-                    console.error(e.message);
-                    console.error(e.stack);
-                    return 'error';
+                result = await self.page.evaluate(f"""
+                async () => {{
+                    try {{
+                        {js_code}
+                        return 'success';
+                    }} catch (e) {{
+                        console.error(e.message);
+                        console.error(e.stack);
+                        return 'error';
+                    }}
                 }}
-            }}
-            """)
-            logger.info(f"JavaScript evaluation result: {result}")
-            return result
-        except Exception as e:
-            logger.exception(f"Failed to evaluate JavaScript: {str(e)}")
-            raise
+                """)
+
+                if not isinstance(result, str):
+                    result = "error"
+
+                logger.info(f"JavaScript evaluation result: {result}")
+                return result
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    # Reinitialize page if needed
+                    if "context was destroyed" in str(e):
+                        logger.info("Reinitializing page due to destroyed context...")
+                        if self.page:
+                            await self.page.reload()
+                            await self.page.wait_for_function(
+                                "typeof window.core !== 'undefined'"
+                            )
+                            await self.page.expose_function(
+                                "saveChunk", self.save_chunk
+                            )
+                            input = self.page.locator("#file-input")
+                            if self.assets:
+                                await input.set_input_files(self.assets[0])
+                            continue
+                    logger.exception(
+                        f"Failed to evaluate JavaScript after {max_retries} attempts"
+                    )
+
+        raise RuntimeError(
+            f"Failed to evaluate JavaScript after {max_retries} attempts: {str(last_error)}"
+        )
 
     def forward(
         self,
