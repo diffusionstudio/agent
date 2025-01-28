@@ -553,8 +553,8 @@ async def evaluate_search(
 
 
 async def run_evaluation():
-    """Run evaluation on all QnA pairs in docs/qna directory."""
-    qna_dir = Path(__file__).parent.parent / "docs" / "qna"
+    """Run evaluation on all QnA pairs in docs/evals/embeddings directory."""
+    qna_dir = Path(__file__).parent.parent / "docs" / "evals" / "embeddings"
     results_no_rerank = []
     results_with_rerank = []
 
