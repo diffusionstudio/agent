@@ -10,6 +10,15 @@ pip install uv
 uv add -r requirements.txt
 ```
 
+## ToDos
+
+- [X] Add auto-embedding of new docs
+    - Add a tool to fetch the latest docs from the operator-ui repo
+    - Checks hash of the file to see if it has changed
+    - If it has changed, parse `---` as chunks feed into embed pipeline
+    - If it has not changed, skip embedding and just use the existing vector db
+- [ ] Add BM25 to enable hybrid search
+
 ## Run Agent
 
 To run the main script:
@@ -27,11 +36,17 @@ The `docs_embedder.py` script provides tools for embedding, searching, and evalu
 
 ### Embed Documentation
 ```bash
-# Embed all docs
-uv run docs_embedder.py embed
+# Auto-embed from URL (default: operator-ui.vercel.app/llms.txt)
+uv run docs_embedder.py auto-embed
 
-# Debug mode (first 5 files only)
-uv run docs_embedder.py embed --debug
+# Debug mode (first 5 chunks only)
+uv run docs_embedder.py auto-embed --debug
+
+# Force update embeddings (ignore hash check)
+uv run docs_embedder.py auto-embed --force
+
+# Custom URL and hash file
+uv run docs_embedder.py auto-embed --url "https://your-url.com/docs.txt" --hash-file "path/to/hash.txt"
 ```
 
 ### Search Documentation

@@ -12,7 +12,8 @@ MXBAI_RERANK_URL = (
 )
 HF_API_KEY = os.getenv("HUGGINGFACE_TOKEN")
 MXBAI_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
-COLLECTION_NAME = "docs"
+QDRANT_PATH = "embeddings/vector_db"
+COLLECTION_NAME = "diffusion_studio_docs"  # More specific name
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 DOCUMENT_CONTEXT_PROMPT = """

@@ -21,28 +21,23 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 from rich.markdown import Markdown
-from rich.panel import Panel
-from utils import generate_embeddings, chunk_markdown, situate_context, rerank
-from config import COLLECTION_NAME, EMBEDDING_DIM, QUERY_PROMPT
+from utils import (
+    generate_embeddings,
+    situate_context,
+    rerank,
+    print_results,
+    print_comparison,
+    normalize_code,
+    normalize_path,
+)
+from config import COLLECTION_NAME, EMBEDDING_DIM, QUERY_PROMPT, QDRANT_PATH
 from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
 import re
+import hashlib
 
-
-class LLMContentTool(Tool):
-    name = "llm_content_tool"
-    description = "A tool that fetches main documentation content from operator-ui.vercel.app/llms.txt"
-    inputs = {}  # No inputs needed since URL is fixed
-    output_type = "string"
-
-    def forward(self) -> Any:
-        """Fetch the documentation content from the fixed URL."""
-        try:
-            response = httpx.get("https://operator-ui.vercel.app/llms.txt")
-            response.raise_for_status()
-            return response.text
-        except httpx.HTTPError as e:
-            raise RuntimeError(f"Failed to fetch docs content: {str(e)}")
+client = QdrantClient(path=QDRANT_PATH)
+logger.info("Connected to Qdrant DB")
 
 
 class DocsSearchTool(Tool):
@@ -127,7 +122,6 @@ async def search_docs(
     """
     try:
         logger.info(f"Starting search for query: '{query}'")
-        client = QdrantClient(path="docs/vector_db")
         logger.debug("Connected to vector DB")
 
         # Generate embedding for query
@@ -238,19 +232,14 @@ async def search_docs(
         raise
 
 
-async def embed_docs(debug: bool = False):
+async def ensure_collection_exists():
+    """Ensure collection exists and is properly configured."""
     try:
-        # Initialize Qdrant client with persistent storage
-        client = QdrantClient(path="docs/vector_db")
-        logger.info("Connected to Qdrant DB")
-
         # Create collection if it doesn't exist
         try:
             client.get_collection(COLLECTION_NAME)
-        except (
-            ValueError,
-            KeyError,
-        ):  # Qdrant raises these when collection doesn't exist
+            logger.info(f"Using existing collection: {COLLECTION_NAME}")
+        except (ValueError, KeyError):
             client.create_collection(
                 collection_name=COLLECTION_NAME,
                 vectors_config=VectorParams(
@@ -258,150 +247,155 @@ async def embed_docs(debug: bool = False):
                 ),
             )
             logger.info(f"Created new collection: {COLLECTION_NAME}")
-        else:
-            logger.info(f"Using existing collection: {COLLECTION_NAME}")
 
-        # Get all MD files recursively including subdirectories
-        docs_dir = Path(__file__).parent.parent / "docs"
-        md_files = []
-        for pattern in ["*.md", "*/*.md", "*/*/*.md"]:
-            md_files.extend(docs_dir.glob(pattern))
-        md_files = sorted(set(md_files))
-
-        if debug:
-            md_files = md_files[:5]
-            logger.warning("DEBUG MODE: Processing only first 5 files")
-
-        logger.info(
-            f"Found {len(md_files)} markdown files in {docs_dir} and subdirectories"
-        )
-
-        # Collect all points for batch upload
-        points = []
-        for md_file in tqdm(md_files, desc="Processing files", unit="file"):
-            try:
-                full_content = md_file.read_text(encoding="utf-8")
-                chunks = chunk_markdown(full_content)
-                logger.info(f"Processing {md_file.name} in {len(chunks)} chunks")
-
-                for i, chunk in enumerate(
-                    tqdm(
-                        chunks,
-                        desc=f"Chunks of {md_file.name}",
-                        unit="chunk",
-                        leave=False,
-                    )
-                ):
-                    try:
-                        # Generate context for the chunk
-                        contextialzed_chunk, usage = await situate_context(
-                            full_content, chunk
-                        )
-                        logger.debug(f"Context generation usage: {usage} for chunk {i}")
-
-                        # Generate embedding for the chunk
-                        text_to_embed = f"{chunk}\n\n{contextialzed_chunk}"
-                        embedding = await generate_embeddings(text_to_embed)
-
-                        if len(embedding) != EMBEDDING_DIM:
-                            raise ValueError(
-                                f"Expected embedding dimension {EMBEDDING_DIM}, got {len(embedding)}"
-                            )
-
-                        # Create point for the chunk
-                        rel_path = md_file.relative_to(docs_dir)
-                        readable_id = (
-                            f"{rel_path}#chunk{i}" if len(chunks) > 1 else str(rel_path)
-                        )
-
-                        points.append(
-                            PointStruct(
-                                id=str(uuid.uuid4()),
-                                vector=embedding,
-                                payload={
-                                    "file_id": readable_id,
-                                    "filename": md_file.name,
-                                    "filepath": str(rel_path),
-                                    "chunk_index": i,
-                                    "total_chunks": len(chunks),
-                                    "original_content": chunk,
-                                    "contextualized_content": contextialzed_chunk,
-                                },
-                            )
-                        )
-                        logger.debug(
-                            f"Processed embedding for chunk {i + 1}/{len(chunks)}"
-                        )
-
-                        # Upload points in small batches to avoid memory issues
-                        if len(points) >= 32:
-                            try:
-                                logger.info(
-                                    f"Uploading batch of {len(points)} points to Qdrant..."
-                                )
-                                client.upload_points(
-                                    collection_name=COLLECTION_NAME,
-                                    points=points,
-                                    batch_size=32,
-                                )
-                                points = []
-                                logger.debug("Batch upload complete")
-                            except Exception as e:
-                                logger.error(f"Failed to upload batch: {str(e)}")
-                                # Continue processing but keep points in memory
-                                continue
-
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to process chunk {i} of {md_file.name}: {str(e)}"
-                        )
-                        continue
-
-            except Exception as e:
-                logger.error(f"Failed to process file {md_file.name}: {str(e)}")
-                continue
-
-        # Upload any remaining points
-        if points:
-            try:
-                logger.info(f"Uploading final {len(points)} points to Qdrant...")
-                client.upload_points(
-                    collection_name=COLLECTION_NAME,
-                    points=points,
-                    batch_size=32,
-                )
-                logger.success(f"Successfully uploaded final {len(points)} chunks")
-            except Exception as e:
-                logger.error(f"Failed to upload final batch: {str(e)}")
-                raise
-
-        logger.success("Completed embedding all documents")
-
+        return client
     except Exception as e:
-        logger.exception(f"Failed to embed docs: {str(e)}")
+        logger.error(f"Failed to setup collection: {str(e)}")
         raise
 
 
-def normalize_code(text: str) -> str:
-    """Normalize code by removing comments, whitespace, and other non-essential elements."""
-    # Remove code block markers
-    text = text.replace("```javascript\n", "").replace("```\n", "").replace("```", "")
-    # Remove comments
-    text = re.sub(r"//.*$", "", text, flags=re.MULTILINE)
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    # Remove empty lines and normalize whitespace
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    return "\n".join(lines)
+async def auto_embed_pipeline(
+    url: str,
+    hash_file: str = "docs/content_hash.txt",
+    debug: bool = False,
+    force: bool = False,
+):
+    """
+    Automated pipeline to fetch, check hash, and embed content if changed.
+    """
+    try:
+        logger.info(
+            f"Starting auto-embed pipeline for {url}{' (DEBUG MODE)' if debug else ''}{' (FORCE UPDATE)' if force else ''}"
+        )
 
+        # Ensure collection exists
+        await ensure_collection_exists()
 
-def normalize_path(path: str) -> str:
-    """Normalize a file path for comparison."""
-    # Convert to Path object and resolve
-    path = Path(path).as_posix()
-    # Remove leading/trailing slashes
-    path = path.strip("/")
-    # Convert to lowercase for case-insensitive comparison
-    return path.lower()
+        # Fetch content and generate hash
+        content, new_hash = await fetch_and_hash_content(url)
+        logger.info(f"Generated hash: {new_hash}")
+
+        # Initialize hash path
+        hash_path = Path(hash_file)
+
+        # Check if hash exists and has changed (skip if force)
+        if not force:
+            has_existing_hash = hash_path.exists()
+
+            # Check if we have embeddings for this URL
+            has_embeddings = False
+            try:
+                results = client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query_filter=Filter(
+                        must=[FieldCondition(key="source", match=MatchText(text=url))]
+                    ),
+                    limit=1,
+                )
+                has_embeddings = bool(results and results.points)
+                logger.info(f"Found existing embeddings: {has_embeddings}")
+            except Exception as e:
+                logger.warning(f"Failed to check existing embeddings: {str(e)}")
+
+            # Only skip if we have both matching hash and embeddings
+            if has_existing_hash and has_embeddings:
+                old_hash = hash_path.read_text().strip()
+                if old_hash == new_hash:
+                    logger.info("Content unchanged and embeddings exist, skipping")
+                    return
+                logger.info(
+                    f"Content changed (old hash: {old_hash[:8]}..., new hash: {new_hash[:8]}...)"
+                )
+            else:
+                if not has_existing_hash:
+                    logger.info("No previous hash found")
+                if not has_embeddings:
+                    logger.info("No embeddings found for URL")
+                logger.info("Processing as new content")
+        else:
+            logger.info("Force update requested, processing content")
+
+        # Store new hash immediately
+        hash_path.parent.mkdir(parents=True, exist_ok=True)
+        hash_path.write_text(new_hash)
+        logger.info("Stored new content hash")
+
+        # Content is new or changed
+        logger.info("Processing chunks...")
+
+        # Clear existing URL content if any
+        try:
+            client.delete(
+                collection_name=COLLECTION_NAME,
+                points_selector=Filter(
+                    must=[FieldCondition(key="source", match=MatchText(text=url))]
+                ),
+            )
+            logger.info(f"Cleared existing content for {url}")
+        except Exception as e:
+            logger.warning(f"Failed to clear existing content: {str(e)}")
+
+        # Split content into chunks by separator
+        chunks = split_by_separator(content)
+        if debug:
+            chunks = chunks[:5]  # Take only first 5 chunks in debug mode
+            logger.info(f"Debug mode: processing first 5/{len(chunks)} chunks")
+        else:
+            logger.info(f"Split content into {len(chunks)} chunks")
+
+        # Process each chunk
+        points = []
+        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks")):
+            try:
+                # Generate context
+                contextualized_chunk, usage = await situate_context(content, chunk)
+                logger.debug(f"Context generation usage: {usage} for chunk {i}")
+
+                # Generate embedding
+                text_to_embed = f"{chunk}\n\n{contextualized_chunk}"
+                embedding = await generate_embeddings(text_to_embed)
+
+                if len(embedding) != EMBEDDING_DIM:
+                    raise ValueError(
+                        f"Expected embedding dimension {EMBEDDING_DIM}, got {len(embedding)}"
+                    )
+
+                # Create point
+                points.append(
+                    PointStruct(
+                        id=str(uuid.uuid4()),
+                        vector=embedding,
+                        payload={
+                            "file_id": f"url_content#{i}",
+                            "filename": url,
+                            "filepath": url,
+                            "source": url,
+                            "chunk_index": i,
+                            "total_chunks": len(chunks),
+                            "original_content": chunk,
+                            "contextualized_content": contextualized_chunk,
+                        },
+                    )
+                )
+
+                # Upload in batches
+                if len(points) >= 32:
+                    await upload_points_batch(points)
+                    points = []
+
+            except Exception as e:
+                logger.error(f"Failed to process chunk {i}: {str(e)}")
+                continue
+
+        # Upload remaining points
+        if points:
+            await upload_points_batch(points)
+
+        logger.success("Successfully updated content and embeddings")
+
+    except Exception as e:
+        logger.exception(f"Auto-embed pipeline failed: {str(e)}")
+        raise
 
 
 async def evaluate_search(
@@ -513,146 +507,6 @@ async def evaluate_search(
     return metrics
 
 
-def print_results(title: str, results: List[Dict]):
-    console = Console()
-    console.print(f"\n[bold cyan]{title}[/bold cyan]")
-
-    def crop_text(text: str, max_length: int = 500) -> str:
-        if not text:
-            return "Not found"
-        text = text.strip()
-        if len(text) > max_length:
-            return text[:max_length] + "..."
-        return text
-
-    for result in results:
-        # Create panel for each result
-        content = [
-            f"[bold]{result['id']}: {result['question']}[/bold]",
-            f"[green]Reference: {result['reference']}[/green]",
-            f"Found: {'✓' if result['reference_found'] else '✗'} (Rank: {result['reference_rank'] if result['reference_found'] else '-'})",
-            f"Search Score: {result['top_score']:.3f}",
-            "",
-            "[bold]Reference Answer:[/bold]",
-            crop_text(result.get("reference_answer", "")),
-            "",
-            "[bold]Found Content:[/bold]",
-            crop_text(result.get("found_content", "")),
-            "",
-            "[bold]Similarity Scores:[/bold]",
-            f"Text: {result.get('semantic_score', 0.0):.3f} ({'✓' if result.get('semantic_match', False) else '✗'})",
-            f"Code: {result.get('code_score', 0.0):.3f} ({'✓' if result.get('code_match', False) else '✗'})",
-        ]
-
-        if "error" in result:
-            content.append(f"[red]Error: {result['error']}[/red]")
-
-        panel = Panel(
-            "\n".join(content),
-            title=f"Q{result['id']}",
-            title_align="left",
-            border_style="blue",
-        )
-        console.print(panel)
-
-    return get_summary_metrics(results)
-
-
-def get_summary_metrics(results: List[Dict]) -> Dict:
-    total = len(results)
-    found = sum(1 for r in results if r["reference_found"])
-    rank_1 = sum(1 for r in results if r["reference_rank"] == 1)
-    text_matches = sum(1 for r in results if r.get("semantic_match", False))
-    code_matches = sum(1 for r in results if r.get("code_match", False))
-    avg_score = sum(r["top_score"] for r in results) / total if total > 0 else 0
-    avg_text = (
-        sum(r.get("semantic_score", 0) for r in results) / total if total > 0 else 0
-    )
-    avg_code = sum(r.get("code_score", 0) for r in results) / total if total > 0 else 0
-    errors = sum(1 for r in results if "error" in r)
-
-    return {
-        "total": total,
-        "found": found,
-        "rank_1": rank_1,
-        "text_matches": text_matches,
-        "code_matches": code_matches,
-        "avg_score": avg_score,
-        "avg_text": avg_text,
-        "avg_code": avg_code,
-        "errors": errors,
-    }
-
-
-def print_comparison(no_rerank_metrics: Dict, rerank_metrics: Dict):
-    console = Console()
-    console.print("\n[bold cyan]Performance Comparison[/bold cyan]")
-
-    total = no_rerank_metrics["total"]
-
-    def format_metric(
-        name: str, vector_val: float, rerank_val: float, is_percent: bool = True
-    ):
-        if is_percent:
-            vector_str = f"{vector_val / total * 100:.1f}%"
-            rerank_str = f"{rerank_val / total * 100:.1f}%"
-            diff = (rerank_val - vector_val) / total * 100
-        else:
-            vector_str = f"{vector_val:.3f}"
-            rerank_str = f"{rerank_val:.3f}"
-            diff = rerank_val - vector_val
-
-        diff_color = "green" if diff > 0 else "red" if diff < 0 else "white"
-        diff_str = f"[{diff_color}]{'+' if diff > 0 else ''}{diff:.1f}{'%' if is_percent else ''}[/{diff_color}]"
-
-        return f"[bold]{name}:[/bold]\n  Vector: {vector_str}\n  Rerank: {rerank_str}\n  Diff: {diff_str}"
-
-    metrics = [
-        format_metric(
-            "References Found", no_rerank_metrics["found"], rerank_metrics["found"]
-        ),
-        format_metric("Rank@1", no_rerank_metrics["rank_1"], rerank_metrics["rank_1"]),
-        format_metric(
-            "Text Matches",
-            no_rerank_metrics["text_matches"],
-            rerank_metrics["text_matches"],
-        ),
-        format_metric(
-            "Code Matches",
-            no_rerank_metrics["code_matches"],
-            rerank_metrics["code_matches"],
-        ),
-        format_metric(
-            "Average Score",
-            no_rerank_metrics["avg_score"],
-            rerank_metrics["avg_score"],
-            False,
-        ),
-        format_metric(
-            "Average Text",
-            no_rerank_metrics["avg_text"],
-            rerank_metrics["avg_text"],
-            False,
-        ),
-        format_metric(
-            "Average Code",
-            no_rerank_metrics["avg_code"],
-            rerank_metrics["avg_code"],
-            False,
-        ),
-    ]
-
-    if no_rerank_metrics["errors"] or rerank_metrics["errors"]:
-        metrics.append(
-            format_metric(
-                "Errors", no_rerank_metrics["errors"], rerank_metrics["errors"]
-            )
-        )
-
-    panel = Panel("\n\n".join(metrics), title="Metrics", border_style="cyan")
-    console.print(panel)
-
-
 async def run_evaluation():
     """Run evaluation on all QnA pairs in docs/qna directory."""
     qna_dir = Path(__file__).parent.parent / "docs" / "qna"
@@ -756,15 +610,41 @@ async def run_evaluation():
     print_comparison(no_rerank_metrics, rerank_metrics)
 
 
-async def main():
-    parser = argparse.ArgumentParser(description="Embed and search documentation")
-    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+async def fetch_and_hash_content(url: str) -> tuple[str, str]:
+    """Fetch content and generate its hash."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        content = response.text
+        # Generate hash of content
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        return content, content_hash
 
-    # Embed command
-    embed_parser = subparsers.add_parser("embed", help="Embed documentation")
-    embed_parser.add_argument(
-        "--debug", action="store_true", help="Process only first 5 files"
-    )
+
+def split_by_separator(content: str, separator: str = "---") -> list[str]:
+    """Split content by separator and clean chunks."""
+    chunks = [chunk.strip() for chunk in content.split(separator) if chunk.strip()]
+    return chunks
+
+
+async def upload_points_batch(points: List[PointStruct]):
+    """Upload a batch of points to Qdrant."""
+    try:
+        logger.info(f"Uploading batch of {len(points)} points...")
+        client.upload_points(
+            collection_name=COLLECTION_NAME,
+            points=points,
+            batch_size=32,
+        )
+        logger.debug("Batch upload complete")
+    except Exception as e:
+        logger.error(f"Failed to upload batch: {str(e)}")
+        raise
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="Search and manage documentation")
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search documentation")
@@ -783,12 +663,34 @@ async def main():
         help="Show full content instead of truncated version",
     )
 
+    # Evaluation command
     subparsers.add_parser("eval", help="Evaluate search on QnA pairs")
+
+    # Auto-embed command
+    auto_embed_parser = subparsers.add_parser("auto-embed", help="Auto-embed from URL")
+    auto_embed_parser.add_argument(
+        "--url",
+        default="https://operator-ui.vercel.app/llms.txt",
+        help="URL to fetch content from",
+    )
+    auto_embed_parser.add_argument(
+        "--hash-file",
+        default="docs/content_hash.txt",
+        help="File to store content hash",
+    )
+    auto_embed_parser.add_argument(
+        "--debug", action="store_true", help="Debug mode - process only first 5 chunks"
+    )
+    auto_embed_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force update embeddings even if content unchanged",
+    )
 
     args = parser.parse_args()
 
-    if args.command == "embed":
-        await embed_docs(debug=args.debug)
+    if args.command == "auto-embed":
+        await auto_embed_pipeline(args.url, args.hash_file, args.debug, args.force)
     elif args.command == "search":
         filter_conditions = {}
         if args.filepath:
@@ -856,5 +758,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    logger.add("docs_embedder.log", rotation="100 MB")
+    logger.add("embedding_pipeline.log", rotation="100 MB")
     asyncio.run(main())
