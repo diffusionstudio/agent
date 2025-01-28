@@ -17,7 +17,10 @@ uv add -r requirements.txt
     - Checks hash of the file to see if it has changed
     - If it has changed, parse `---` as chunks feed into embed pipeline
     - If it has not changed, skip embedding and just use the existing vector db
-- [ ] Add BM25 to enable hybrid search
+- [ ] Add [BM25](https://github.com/anthropics/anthropic-cookbook/blob/main/skills/contextual-embeddings/guide.ipynb) to enable hybrid search
+- [ ] Add [MCP](https://modelcontextprotocol.io/introduction) integration
+    > MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
+    Also see: [Simple Chatbot](https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/clients/simple-chatbot)
 
 ## Run Agent
 
