@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.45.0",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
+    "openai>=1.60.2",
     "playwright>=1.49.1",
     "pre-commit>=4.1.0",
     "python-dotenv>=1.0.1",

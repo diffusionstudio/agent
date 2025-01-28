@@ -1,7 +1,8 @@
 import asyncio
-from pathlib import Path
 import argparse
 import uuid
+import httpx
+from pathlib import Path
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -21,9 +22,25 @@ from rich.table import Table
 from rich import box
 from rich.markdown import Markdown
 from utils import generate_embeddings, chunk_markdown, situate_context, rerank
-from config import COLLECTION_NAME, EMBEDDING_DIM
+from config import COLLECTION_NAME, EMBEDDING_DIM, QUERY_PROMPT
 from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
+
+
+class LLMContentTool(Tool):
+    name = "llm_content_tool"
+    description = "A tool that fetches main documentation content from operator-ui.vercel.app/llm.txt"
+    inputs = {}  # No inputs needed since URL is fixed
+    output_type = "string"
+
+    def forward(self) -> Any:
+        """Fetch the documentation content from the fixed URL."""
+        try:
+            response = httpx.get("https://operator-ui.vercel.app/llm.txt")
+            response.raise_for_status()
+            return response.text
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Failed to fetch docs content: {str(e)}")
 
 
 class DocsSearchTool(Tool):
@@ -121,7 +138,7 @@ async def search_docs(
         logger.debug("Connected to vector DB")
 
         # Generate embedding for query
-        query_embedding = await generate_embeddings(query)
+        query_embedding = await generate_embeddings(QUERY_PROMPT + query)
         logger.debug(f"Generated query embedding of size {len(query_embedding)}")
 
         # Build filter if conditions provided
@@ -287,11 +304,13 @@ async def embed_docs(debug: bool = False):
                     )
                 ):
                     try:
+                        # Generate context for the chunk
                         contextialzed_chunk, usage = await situate_context(
                             full_content, chunk
                         )
                         logger.debug(f"Context generation usage: {usage} for chunk {i}")
 
+                        # Generate embedding for the chunk
                         text_to_embed = f"{chunk}\n\n{contextialzed_chunk}"
                         embedding = await generate_embeddings(text_to_embed)
 
@@ -300,6 +319,7 @@ async def embed_docs(debug: bool = False):
                                 f"Expected embedding dimension {EMBEDDING_DIM}, got {len(embedding)}"
                             )
 
+                        # Create point for the chunk
                         rel_path = md_file.relative_to(docs_dir)
                         readable_id = (
                             f"{rel_path}#chunk{i}" if len(chunks) > 1 else str(rel_path)
@@ -321,8 +341,26 @@ async def embed_docs(debug: bool = False):
                             )
                         )
                         logger.debug(
-                            f"Prepared chunk {i + 1}/{len(chunks)} for embedding"
+                            f"Processed embedding for chunk {i + 1}/{len(chunks)}"
                         )
+
+                        # Upload points in small batches to avoid memory issues
+                        if len(points) >= 32:
+                            try:
+                                logger.info(
+                                    f"Uploading batch of {len(points)} points to Qdrant..."
+                                )
+                                client.upload_points(
+                                    collection_name=COLLECTION_NAME,
+                                    points=points,
+                                    batch_size=32,
+                                )
+                                points = []
+                                logger.debug("Batch upload complete")
+                            except Exception as e:
+                                logger.error(f"Failed to upload batch: {str(e)}")
+                                # Continue processing but keep points in memory
+                                continue
 
                     except Exception as e:
                         logger.error(
@@ -334,15 +372,19 @@ async def embed_docs(debug: bool = False):
                 logger.error(f"Failed to process file {md_file.name}: {str(e)}")
                 continue
 
-        # Batch upload all points
+        # Upload any remaining points
         if points:
-            logger.info(f"Uploading {len(points)} points to Qdrant...")
-            client.upload_points(
-                collection_name=COLLECTION_NAME,
-                points=points,
-                batch_size=64,  # Adjust based on your memory constraints
-            )
-            logger.success(f"Successfully uploaded {len(points)} chunks")
+            try:
+                logger.info(f"Uploading final {len(points)} points to Qdrant...")
+                client.upload_points(
+                    collection_name=COLLECTION_NAME,
+                    points=points,
+                    batch_size=32,
+                )
+                logger.success(f"Successfully uploaded final {len(points)} chunks")
+            except Exception as e:
+                logger.error(f"Failed to upload final batch: {str(e)}")
+                raise
 
         logger.success("Completed embedding all documents")
 

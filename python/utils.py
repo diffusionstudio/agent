@@ -79,43 +79,69 @@ def chunk_markdown(content: str, max_lines: int = 100) -> list[str]:
     return chunks
 
 
-async def generate_embeddings(text: str, timeout=30, retries=MAX_RETRIES):
+async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RETRIES):
     """
     Generate embeddings for the given text using MXBAI API.
 
     Args:
-        text (str): Text to embed
+        text (str | list[str]): Text or list of texts to embed
         timeout (int, optional): Request timeout in seconds. Defaults to 30.
         retries (int, optional): Number of retries on failure. Defaults to MAX_RETRIES.
 
     Returns:
-        dict: JSON response containing embeddings
+        list[list[float]]: List of embeddings for each input text
     """
     last_error = None
     for attempt in range(retries):
         try:
             async with httpx.AsyncClient() as client:
+                logger.debug(
+                    f"Making embedding request with {len(text) if isinstance(text, list) else 1} texts"
+                )
                 response = await client.post(
                     MXBAI_API_URL,
                     headers=MXBAI_HEADERS,
-                    json={"inputs": text},
+                    json={"inputs": text if isinstance(text, list) else [text]},
                     timeout=timeout,
                 )
                 response.raise_for_status()
-                return response.json()
-        except (httpx.TimeoutException, httpx.HTTPError) as e:
+                embeddings = response.json()
+                logger.debug(f"Got response with status {response.status_code}")
+
+                if not embeddings:
+                    raise ValueError("Empty response from embedding API")
+
+                return embeddings if isinstance(text, list) else embeddings[0]
+
+        except httpx.TimeoutException as e:
             last_error = e
-            if attempt < retries - 1:
-                delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
-                logger.warning(
-                    f"Embedding attempt {attempt + 1} failed: {str(e)}. Retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
+            logger.warning(f"Timeout during embedding attempt {attempt + 1}: {str(e)}")
+        except httpx.RequestError as e:
+            last_error = e
+            logger.warning(
+                f"Request error during embedding attempt {attempt + 1}: {str(e)}"
+            )
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                f"Unexpected error during embedding attempt {attempt + 1}: {str(e)}"
+            )
+
+        if attempt < retries - 1:
+            delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
+            logger.warning(
+                f"Embedding attempt {attempt + 1} failed. Retrying in {delay}s..."
+            )
+            await asyncio.sleep(delay)
             continue
 
+    error_msg = f"Request failed after {retries} attempts"
     if isinstance(last_error, httpx.TimeoutException):
-        raise TimeoutError(f"Request timed out after {retries} attempts")
-    raise RuntimeError(f"Request failed after {retries} attempts: {str(last_error)}")
+        raise TimeoutError(f"{error_msg}: Timeout - {str(last_error)}")
+    elif isinstance(last_error, httpx.RequestError):
+        raise RuntimeError(f"{error_msg}: Request failed - {str(last_error)}")
+    else:
+        raise RuntimeError(f"{error_msg}: {str(last_error)}")
 
 
 async def rerank(query: str, documents: list[str], timeout=30):
