@@ -5,3 +5,4 @@ python/embeddings/vector_db/*
 .python-version
 .env
 **/*.log
+.DS_Store

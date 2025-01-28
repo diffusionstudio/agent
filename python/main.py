@@ -11,9 +11,9 @@ You are a video editing assistant that helps users edit videos using Diffusion S
 
 If the retrieved content is not enough, you should use the DocsSearchTool to search for more information about syntax of Diffusion Studio, and convert the retrieved codes from Typescript to Javascript, before passing it to the VideoEditorTool.
 
-Example code to add a subclip to a video that is 150 seconds long:
+Sample code for adding to a video, clipping it to 150 frames and then rendering the composition:
 ```js
-const [videoFile] = files();
+const videoFile = assets()[0];
 const video = new core.VideoClip(videoFile).subclip(0, 150);
 await composition.add(video);
 await render();
@@ -37,7 +37,7 @@ def main():
         system_prompt=modified_system_prompt,
     )
     agent.run(
-        "Add a 150 second subclip to the video, assets/big_buck_bunny_1080p_30fps.mp4"
+        "Clip big buck bunny to 150 frames, add it to the composition and render the result"
     )
 
 
