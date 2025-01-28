@@ -34,6 +34,8 @@ from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
 import re
 import hashlib
+import unicodedata
+import ftfy
 
 client = QdrantClient(path=QDRANT_PATH)
 logger.info("Connected to Qdrant DB")
@@ -192,10 +194,9 @@ async def search_docs(
             )
 
         if hits and rerank_results:
-            # Take top K results for reranking
-            top_k = min(5, len(hits))
-            docs_to_rerank = [hit["content"] for hit in hits[:top_k] if hit["content"]]
-            logger.info(f"Reranking top {top_k} results...")
+            # Rerank all results instead of just top 5
+            docs_to_rerank = [hit["content"] for hit in hits if hit["content"]]
+            logger.info(f"Reranking {len(docs_to_rerank)} results...")
             logger.debug(f"Reranking {len(docs_to_rerank)} documents")
 
             rerank_scores = await rerank(query=query, documents=docs_to_rerank)
@@ -204,23 +205,25 @@ async def search_docs(
                 f"Sample rerank result: {rerank_scores[0] if rerank_scores else None}"
             )
 
-            # Combine vector similarity and rerank scores (70-30 split) for top K
-            for hit, rerank_result in zip(hits[:top_k], rerank_scores):
+            # Keep vector and rerank scores separate
+            for hit, rerank_result in zip(hits, rerank_scores):
                 rerank_dict = (
                     rerank_result[0]
                     if isinstance(rerank_result, list)
                     else rerank_result
                 )
-                rerank_score = float(rerank_dict.get("score", 0.0))
-                old_score = hit["score"]
-                hit["score"] = 0.7 * old_score + 0.3 * rerank_score
+                hit["vector_score"] = hit["score"]  # Store original vector score
+                hit["rerank_score"] = float(
+                    rerank_dict.get("score", 0.0)
+                )  # Store rerank score
+                # Use rerank score as primary score when reranking
+                hit["score"] = hit["rerank_score"]
                 logger.debug(
-                    f"Combined scores for {hit['filepath']}: "
-                    f"vector={old_score:.3f}, rerank={rerank_score:.3f}, "
-                    f"final={hit['score']:.3f}"
+                    f"Scores for {hit['filepath']}: "
+                    f"vector={hit['vector_score']:.3f}, rerank={hit['rerank_score']:.3f}"
                 )
 
-            # Sort all results, keeping non-reranked scores for results after top K
+            # Sort by rerank score
             hits = sorted(hits, key=lambda x: x["score"], reverse=True)
 
         # Return requested number of results
@@ -439,7 +442,14 @@ async def evaluate_search(
     query: str, reference_file: str, reference_answer: str, use_rerank: bool = False
 ) -> Dict:
     """Evaluate search results for a single query against reference."""
-    results = await search_docs(query=query, limit=5, rerank_results=use_rerank)
+    # Get more results for reranking
+    vector_limit = 15 if use_rerank else 5
+    results = await search_docs(
+        query=query, limit=vector_limit, rerank_results=use_rerank
+    )
+
+    # Take top 5 after reranking if needed
+    results = results[:5]
 
     # Normalize reference path
     reference_file = normalize_path(reference_file)
@@ -652,25 +662,52 @@ async def fetch_and_hash_content(url: str) -> tuple[str, str]:
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         response.raise_for_status()
-        content = response.text
-        # Generate hash of content
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        # Fix text encoding issues
+        content = ftfy.fix_text(response.content.decode("utf-8", errors="replace"))
+        # Normalize unicode characters
+        content = unicodedata.normalize("NFKC", content)
+        # Generate hash of normalized content
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return content, content_hash
 
 
 def split_by_separator(content: str, separator: str = "---") -> list[str]:
     """Split content by separator and clean chunks."""
+    # Fix any encoding issues and normalize
+    content = (
+        ftfy.fix_text(content)
+        if isinstance(content, str)
+        else ftfy.fix_text(content.decode("utf-8", errors="replace"))
+    )
+    content = unicodedata.normalize("NFKC", content)
+
     chunks = []
     raw_chunks = [chunk.strip() for chunk in content.split(separator) if chunk.strip()]
 
     for chunk in raw_chunks:
         lines = chunk.split("\n")
-        if len(lines) >= 2 and lines[0].startswith("#"):
-            # Extract filename from the markdown header
-            filename = lines[0].replace("#", "").strip()
-            # Combine rest of content
-            content = "\n".join(lines[1:]).strip()
-            if content:  # Only add if there's content after the header
+        # Skip empty chunks
+        if not lines:
+            continue
+
+        # Find the filename line (format: # filename.md)
+        filename = None
+        content_lines = []
+        in_content = False
+
+        for line in lines:
+            if not filename and line.startswith("# ") and ".md" in line:
+                # Extract filename from the markdown header (e.g. "# 0-welcome.md" -> "0-welcome.md")
+                filename = line.replace("#", "").strip()
+                in_content = True
+                continue
+
+            if in_content:
+                content_lines.append(line)
+
+        if filename and content_lines:
+            content = "\n".join(content_lines).strip()
+            if content:  # Only add if there's content
                 chunks.append(f"File: {filename}\n\n{content}")
 
     return chunks
@@ -764,7 +801,8 @@ async def main():
         )
 
         table.add_column("#", style="dim", width=4)
-        table.add_column("Score", justify="right", width=4)
+        table.add_column("Vector", justify="right", width=6)
+        table.add_column("Rerank", justify="right", width=6) if args.rerank else None
         table.add_column("File", style="green", width=4)
         table.add_column("Section", justify="center", width=4)
         table.add_column("Content", ratio=1, no_wrap=args.full_content)
@@ -788,16 +826,31 @@ async def main():
                 )
                 content_md = f"{content_md}\n{context_md}"
 
-            # Show section info (e.g., "Part 1/3")
+            # Show section info
             section_info = (
                 f"Part {hit['chunk_index'] + 1}/{hit['total_chunks']}"
                 if hit["chunk_index"] is not None and hit["total_chunks"] > 1
                 else "Full Doc"
             )
 
-            table.add_row(
-                str(i), f"{hit['score']:.3f}", hit["filepath"], section_info, content_md
-            )
+            # Add row with both scores if reranking
+            if args.rerank:
+                table.add_row(
+                    str(i),
+                    f"{hit.get('vector_score', 0):.3f}",
+                    f"{hit.get('rerank_score', 0):.3f}",
+                    hit["filepath"],
+                    section_info,
+                    content_md,
+                )
+            else:
+                table.add_row(
+                    str(i),
+                    f"{hit['score']:.3f}",
+                    hit["filepath"],
+                    section_info,
+                    content_md,
+                )
 
         console.print("\n")
         console.print(table)
