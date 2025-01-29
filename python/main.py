@@ -1,7 +1,7 @@
-from smolagents import CodeAgent, HfApiModel, CODE_SYSTEM_PROMPT
+from smolagents import CodeAgent, LiteLLMModel, CODE_SYSTEM_PROMPT
 from core_tool import VideoEditorTool
 from docs_embedder import DocsSearchTool, ensure_collection_exists
-from config import HF_API_KEY
+from config import ANTHROPIC_API_KEY
 import asyncio
 
 modified_system_prompt = (
@@ -309,12 +309,16 @@ async def init_docs():
 
 
 def main():
-    # Initialize docs collection and embeddings
+    """Initialize docs collection and embeddings"""
     asyncio.run(init_docs())
 
     agent = CodeAgent(
         tools=[VideoEditorTool(), DocsSearchTool()],
-        model=HfApiModel(token=HF_API_KEY),
+        model=LiteLLMModel(
+            "anthropic/claude-3-5-sonnet-latest",
+            temperature=0.0,
+            api_key=ANTHROPIC_API_KEY,
+        ),
         system_prompt=modified_system_prompt,
     )
     agent.run(
