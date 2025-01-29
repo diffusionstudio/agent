@@ -1,4 +1,14 @@
-# Video Composer Agent
+<p align="center">
+  <img src="./docs/assets/banner.png" alt="Library Banner" style="aspect-ratio: 1200/500;width: 100%;" />
+  <h1 align="center">Video Composer Agent</h1>
+</p>
+
+<p align="center">
+  <a href="https://discord.com/invite/zPQJrNGuFB"><img src="https://img.shields.io/discord/1115673443141156924?style=flat&logo=discord&logoColor=fff&color=000000" alt="discord"></a>
+  <a href="https://x.com/diffusionhq"><img src="https://img.shields.io/badge/Follow for-Updates-blue?color=000000&logo=X&logoColor=ffffff" alt="Static Badge"></a>
+  <a href="https://www.ycombinator.com/companies/diffusion-studio"><img src="https://img.shields.io/badge/Combinator-F24-blue?color=000000&logo=ycombinator&logoColor=ffffff" alt="Static Badge"></a>
+</p>
+<br/>
 
 ## Setup
 
@@ -8,6 +18,14 @@ pip install uv
 
 ```bash
 uv add -r requirements.txt
+```
+
+## Environment Variables
+
+Create a `.env` file with the following variables:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+HUGGINGFACE_TOKEN=hf_...
 ```
 
 ## ToDos
@@ -21,6 +39,7 @@ uv add -r requirements.txt
 - [ ] Add [MCP](https://modelcontextprotocol.io/introduction) integration
     > MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
     Also see: [Simple Chatbot](https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/clients/simple-chatbot)
+- [ ] Add DAPI support for speech recognition and synthesis workloads
 
 ## Run Agent
 
