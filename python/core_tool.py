@@ -9,20 +9,16 @@ import os
 
 class VideoEditorTool(Tool):
     name = "video_editor_tool"
-    description = """A tool that connects to a remote browser and performs video editing operations using DiffStudio's web-based editor.
-    Note: Documentation examples are in TypeScript - remove type annotations before using.
+    description = """A tool that connects to a remote browser and performs video editing operations using Diffusion Studio's web-based operator ui.
+    Note: Documentation examples might be in TypeScript - remove type annotations before using, so that the code can be executed in a JavaScript environment.
 
     Common operations:
-    - Clipping: video.subclip(start_frame, end_frame)
-    - Offsetting: video.offset(offset_frames)
-    - Trimming: image.trim(start_frame, end_frame)
-    - Splitting: video.split(split_frames)
-    - Adding to timeline: composition.add(clip)
-    - Rendering: await render()
-
-    TypeScript to JavaScript:
-    - Remove type annotations (e.g., 'const video: VideoClip' becomes 'const video')
-    - Keep the actual method calls and properties the same
+    - Clipping: `video.subclip(start_frame, end_frame)`
+    - Offsetting: `video.offset(offset_frames)`
+    - Trimming: `image.trim(start_frame, end_frame)`
+    - Splitting: `await video.split(split_frames)`
+    - Adding to timeline: `await composition.add(clip)`
+    - Rendering: `await render()`
     """
     inputs = {
         "assets": {
@@ -105,7 +101,7 @@ class VideoEditorTool(Tool):
             logger.debug("Editor interface loaded")
 
             input = self.page.locator("#file-input")
-            logger.info("Scripts loaded")
+            logger.info("Received file input reference:", bool(input))
 
             self.page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
             await self.page.expose_function("saveChunk", self.save_chunk)
@@ -132,7 +128,8 @@ class VideoEditorTool(Tool):
                 )
                 logger.debug(f"JavaScript code:\n{js_code}")
 
-                result = await self.page.evaluate(f"""
+                result = await self.page.evaluate(
+                    f"""
                 async () => {{
                     try {{
                         {js_code}
@@ -143,7 +140,8 @@ class VideoEditorTool(Tool):
                         return 'error';
                     }}
                 }}
-                """)
+                """
+                )
 
                 if not isinstance(result, str):
                     result = "error"
