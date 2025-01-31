@@ -43,6 +43,7 @@ dependencies = [
     "nodeenv==1.9.1",
     "numpy==2.2.2",
     "openai==1.60.2",
+    "opencv-python>=4.11.0.86",
     "packaging==24.2",
     "pandas==2.2.3",
     "pillow==11.1.0",

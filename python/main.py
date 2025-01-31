@@ -1,5 +1,6 @@
 from smolagents import CodeAgent, LiteLLMModel, CODE_SYSTEM_PROMPT
 from core_tool import VideoEditorTool
+from visual_feedback_tool import VisualFeedbackTool
 from docs_embedder import DocsSearchTool, ensure_collection_exists
 from config import ANTHROPIC_API_KEY
 import asyncio
@@ -10,6 +11,11 @@ modified_system_prompt = (
 You are a video editing assistant that helps users edit videos using Diffusion Studio's browser based operator ui which exposes the @diffusionstudio/core editing engine.
 
 If the retrieved content is not enough, you should use the DocsSearchTool to search for more information about syntax of Diffusion Studio, and convert the retrieved codes from Typescript to Javascript if needed, before passing it to the VideoEditorTool.
+
+After editing is complete, you can use the VisualFeedbackTool to analyze the output video and verify if the edits achieved the desired outcome. The tool will:
+1. Extract frames at regular intervals
+2. Analyze each frame for quality and consistency
+3. Check if the edits meet the user's goals
 
 ## Operator UI Concepts
 - Local assets uploaded to the interface are available in the browser environment in the order in which they were added using the `assets()` function.
@@ -173,9 +179,9 @@ Task: Put a large "Hello World" text on the screen, center it and rotate + scale
 
 Code:
 ```javascript
-const font = core.FontManager.load({ 
-  family: 'The Bold Font', 
-  weight: '500' 
+const font = core.FontManager.load({
+  family: 'The Bold Font',
+  weight: '500'
 });
 
 await composition.add(
@@ -313,7 +319,7 @@ def main():
     asyncio.run(init_docs())
 
     agent = CodeAgent(
-        tools=[VideoEditorTool(), DocsSearchTool()],
+        tools=[VideoEditorTool(), DocsSearchTool(), VisualFeedbackTool()],
         model=LiteLLMModel(
             "anthropic/claude-3-5-sonnet-latest",
             temperature=0.0,
@@ -321,9 +327,12 @@ def main():
         ),
         system_prompt=modified_system_prompt,
     )
-    agent.run(
-        "Clip big buck bunny to 150 frames, add it to the composition and render the result, assets/big_buck_bunny_1080p_30fps.mp4"
-    )
+
+    # Example of using both tools in sequence
+    agent.run("""
+    1. Clip big buck bunny to 150 frames, add it to the composition and render the result
+    2. After rendering, analyze the output video to verify smooth transitions and quality
+    """)
 
 
 if __name__ == "__main__":
