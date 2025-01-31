@@ -9,11 +9,10 @@ from config import (
     MXBAI_HEADERS,
     MXBAI_RERANK_URL,
     ANTHROPIC_API_KEY,
-    DOCUMENT_CONTEXT_PROMPT,
-    CHUNK_CONTEXT_PROMPT,
     MAX_RETRIES,
     RETRY_DELAY,
 )
+from prompts import DOCUMENT_CONTEXT_PROMPT, CHUNK_CONTEXT_PROMPT
 from pathlib import Path
 from typing import List, Dict
 from rich.console import Console
