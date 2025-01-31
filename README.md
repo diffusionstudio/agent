@@ -26,6 +26,10 @@ Create a `.env` file with the following variables:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 HUGGINGFACE_TOKEN=hf_...
+# Make sure the browser supports common audio/video codecs
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# Alternatively, you can use a remote browser (connect over cdp)
+# PLAYWRIGHT_WEB_SOCKET_URL=ws://localhost:3000
 ```
 
 ## ToDos

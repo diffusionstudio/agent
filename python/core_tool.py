@@ -46,6 +46,8 @@ class VideoEditorTool(Tool):
         self.browser: Optional[Browser] = None  # Remote browser instance
         self.output: Optional[str] = None  # Output video path
         self.assets: Optional[list[str]] = None  # Input video files
+        self.executable_path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH") # Path to the browser executable
+        self.web_socket_url = os.getenv("PLAYWRIGHT_WEB_SOCKET_URL") # Web socket url to connect to the browser
         logger.info("VideoEditorTool initialized")
 
     def save_chunk(self, data: list[int], position: int) -> None:
@@ -86,11 +88,14 @@ class VideoEditorTool(Tool):
             # Ensure output directory exists
             self._ensure_output_directory(self.output)
 
-            logger.info("Connecting to remote browser...")
-            self.browser = await playwright.chromium.connect_over_cdp(
-                "wss://chrome.diffusion.studio?token=d638be68e96471b515a8166161a3af1a9b6884e048120d6e9c3bcc1d135fa0da"
-            )
-            logger.debug("Connected to remote browser")
+            if self.web_socket_url:
+                logger.info("Connecting to remote browser...")
+                self.browser = await playwright.chromium.connect_over_cdp(self.web_socket_url)
+                logger.debug("Connected to remote browser")
+            else:
+                logger.info("Launching local browser...")
+                self.browser = await playwright.chromium.launch(executable_path=self.executable_path)
+                logger.debug("Local browser launched")
 
             self.page = await self.browser.new_page()
             logger.debug("Created new page")
