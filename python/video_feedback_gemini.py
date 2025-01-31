@@ -1,19 +1,20 @@
 import os
 import time
 from smolagents import Tool
-from typing import Any, Optional
 from loguru import logger
 from google.generativeai.client import configure
-from google.generativeai.generative_models import GenerativeModel
-from google.generativeai.files import upload_file, get_file
-from google.generativeai.types import GenerationConfig
+import google.generativeai as genai
+from dotenv import load_dotenv
+from typing import Any
+
+load_dotenv()
 
 # Configure API key
-configure(api_key=os.getenv("GOOGLE_API_KEY"))
+configure(api_key=os.getenv("GOOGLE_GEMINI_BASE_KEY"))
 
 
-class VisualFeedbackTool(Tool):
-    name = "visual_feedback"
+class VideoFeedbackGemini(Tool):
+    name = "video_feedback"
     description = """Analyzes a video after editing to verify if it meets the user's goals using Gemini's video analysis capabilities."""
 
     inputs = {
@@ -34,14 +35,13 @@ class VisualFeedbackTool(Tool):
 
     def __init__(self):
         super().__init__()
-        self.model = GenerativeModel("gemini-1.5-pro")
+        self.model = genai.GenerativeModel(model_name="gemini-1.5-pro")
 
     def forward(
         self,
-        video_path: Optional[str] = "output/video.mp4",
-        final_goal: Optional[
-            str
-        ] = "The video should show a smooth transition between scenes without any glitches or artifacts",
+        video_path: str | None = "output/video.mp4",
+        final_goal: str
+        | None = "The video should show a smooth transition between scenes without any glitches or artifacts",
     ) -> Any:
         """Process video and get feedback"""
         if not video_path:
@@ -54,17 +54,17 @@ class VisualFeedbackTool(Tool):
         try:
             # Upload video
             logger.info("Uploading video...")
-            video_file = upload_file(video_path)
+            video_file = genai.upload_file(path=video_path)
             logger.info(f"Completed upload: {video_file.uri}")
 
             # Wait for processing
-            while video_file.state == "PROCESSING":
+            while video_file.state.name == "PROCESSING":
                 logger.info("Waiting for video processing...")
                 time.sleep(5)
-                video_file = get_file(video_file.name)
+                video_file = genai.get_file(video_file.name)
 
-            if video_file.state == "FAILED":
-                raise ValueError(f"Video processing failed: {video_file.state}")
+            if video_file.state.name == "FAILED":
+                raise ValueError(f"Video processing failed: {video_file.state.name}")
 
             # Analyze video
             prompts = [
@@ -80,8 +80,7 @@ class VisualFeedbackTool(Tool):
             results = {}
             for prompt in prompts:
                 response = self.model.generate_content(
-                    [video_file, prompt],
-                    generation_config=GenerationConfig(temperature=0.4),
+                    [video_file, prompt], request_options={"timeout": 600}
                 )
                 results[prompt.split("\n")[0]] = response.text
 
@@ -93,3 +92,21 @@ class VisualFeedbackTool(Tool):
         except Exception as e:
             logger.error(f"Video analysis failed: {str(e)}")
             return {"error": str(e)}
+
+
+def main():
+    tool = VideoFeedbackGemini()
+    results = tool.forward(
+        video_path="python/output/video.mp4",
+        final_goal="Analyze the video quality and transitions",
+    )
+
+    print("\nResults:")
+    for prompt, result in results.items():
+        print(f"\n=== {prompt} ===")
+        print(result)
+        print("=" * 50)
+
+
+if __name__ == "__main__":
+    main()
