@@ -44,8 +44,11 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/Ma
     > MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
     Also see: [Simple Chatbot](https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/clients/simple-chatbot)
 - [ ] Add DAPI support for speech recognition and synthesis workloads
+- [ ] Add [VideoLLaMA](https://github.com/DAMO-NLP-SG/VideoLLaMA3) support
+- [ ] Add State management for VideoEditor Tool
 - [ ] Reuse browser session for forward steps and render the composition when editing instructions are fulfilled
 - [ ] Feed [browser session recording](https://playwright.dev/python/docs/videos) back to video undertanding model and enable agent to call pause/play/seek
+
 
 ## Run Agent
 

@@ -1,5 +1,6 @@
 from smolagents import CodeAgent, LiteLLMModel
 from core_tool import VideoEditorTool
+from visual_feedback_tool import VisualFeedbackTool
 from docs_embedder import DocsSearchTool, ensure_collection_exists
 from config import ANTHROPIC_API_KEY
 from prompts import SYSTEM_PROMPT
@@ -22,7 +23,7 @@ def main():
     asyncio.run(init_docs())
 
     agent = CodeAgent(
-        tools=[VideoEditorTool(), DocsSearchTool()],
+        tools=[VideoEditorTool(), DocsSearchTool(), VisualFeedbackTool()],
         model=LiteLLMModel(
             "anthropic/claude-3-5-sonnet-latest",
             temperature=0.0,
@@ -30,9 +31,12 @@ def main():
         ),
         system_prompt=SYSTEM_PROMPT,
     )
-    agent.run(
-        "Animate assets/big_buck_bunny_1080p_30fps.mp4, it should be scaled to 50% in the beginning and 100% after a few seconds. Make sure it's centered. Add a text 'Hello World' at the bottom of the video. Then render the result."
-    )
+
+    # Example of using both tools in sequence
+    agent.run("""
+    1. Clip big buck bunny to 150 frames, add it to the composition and render the result
+    2. After rendering, analyze the output video to verify smooth transitions and quality
+    """)
 
 
 if __name__ == "__main__":
