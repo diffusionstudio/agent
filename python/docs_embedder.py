@@ -29,7 +29,8 @@ from utils import (
     normalize_code,
     normalize_path,
 )
-from config import COLLECTION_NAME, EMBEDDING_DIM, QUERY_PROMPT, QDRANT_PATH
+from config import COLLECTION_NAME, EMBEDDING_DIM, QDRANT_PATH
+from prompts import QUERY_PROMPT
 from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
 import re
