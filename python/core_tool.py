@@ -102,7 +102,7 @@ class VideoEditorTool(Tool):
             logger.debug("Created new page")
 
             logger.info("Loading editor interface...")
-            await self.page.goto("https://operator-ui.vercel.app")
+            await self.page.goto("https://operator.diffusion.studio")
             await self.page.wait_for_function("typeof window.core !== 'undefined'")
             logger.debug("Editor interface loaded")
 

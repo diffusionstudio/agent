@@ -14,7 +14,7 @@ async def init_docs():
     from docs_embedder import auto_embed_pipeline
 
     await auto_embed_pipeline(
-        url="https://operator-ui.vercel.app/llms.txt", hash_file="docs/content_hash.txt"
+        url="https://operator.diffusion.studio/llms.txt", hash_file="docs/content_hash.txt"
     )
 
 

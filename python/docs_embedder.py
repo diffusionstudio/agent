@@ -755,7 +755,7 @@ async def main():
     auto_embed_parser = subparsers.add_parser("auto-embed", help="Auto-embed from URL")
     auto_embed_parser.add_argument(
         "--url",
-        default="https://operator-ui.vercel.app/llms.txt",
+        default="https://operator.diffusion.studio/llms.txt",
         help="URL to fetch content from",
     )
     auto_embed_parser.add_argument(
