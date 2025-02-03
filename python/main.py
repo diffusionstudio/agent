@@ -42,7 +42,6 @@ def main():
     2. Dont render just use `await sample()` first and wait for claude feedback
     3. After claude feedback, render the video and analyze the output video to verify smooth transitions and quality
     """)
-    client.close()
 
 
 if __name__ == "__main__":
