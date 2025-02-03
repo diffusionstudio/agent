@@ -131,11 +131,11 @@ class VideoEditorTool(Tool):
             self._ensure_output_directory(self.output)
 
             if self.web_socket_url:
-                logger.info("Connecting to remote browser...")
+                logger.debug("Connecting to remote browser via websocket ...")
                 self.browser = await playwright.chromium.connect_over_cdp(
                     self.web_socket_url
                 )
-                logger.debug("Connected to remote browser")
+                logger.debug("Connected to remote browser via websocket")
             else:
                 logger.info("Launching local browser...")
                 self.browser = await playwright.chromium.launch(
@@ -172,66 +172,40 @@ class VideoEditorTool(Tool):
     async def evaluate(
         self,
         js_code: str,
-        max_retries: int = 3,
     ) -> str:
+        """Evaluates the JavaScript code in the browser."""
+
         if not self.page:
             logger.error("Page not initialized when trying to evaluate JavaScript")
             raise ValueError("Page not initialized")
 
-        last_error = None
-        for attempt in range(max_retries):
-            try:
-                logger.info(
-                    f"Evaluating JavaScript code... (attempt {attempt + 1}/{max_retries})"
-                )
-                logger.debug(f"JavaScript code:\n{js_code}")
+        try:
+            logger.info("Evaluating JavaScript code...")
 
-                result = await self.page.evaluate(
-                    f"""
-                async () => {{
-                    try {{
-                        {js_code}
-                        return 'success';
-                    }} catch (e) {{
-                        console.error(e.message);
-                        console.error(e.stack);
-                        return 'error';
-                    }}
+            logger.debug(f"JavaScript code:\n{js_code}")
+
+            result = await self.page.evaluate(
+                f"""
+            async () => {{
+                try {{
+                    {js_code}
+                    return 'success';
+                }} catch (e) {{
+                    console.error(e.message);
+                    console.error(e.stack);
+                    return 'error';
                 }}
-                """
-                )
+            }}
+            """
+            )
 
-                if not isinstance(result, str):
-                    result = "error"
+            if not isinstance(result, str):
+                result = "error"
 
-                logger.info(f"JavaScript evaluation result: {result}")
-                return result
-            except Exception as e:
-                last_error = e
-                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
-                if attempt < max_retries - 1:
-                    # Reinitialize page if needed
-                    if "context was destroyed" in str(e):
-                        logger.info("Reinitializing page due to destroyed context...")
-                        if self.page:
-                            await self.page.reload()
-                            await self.page.wait_for_function(
-                                "typeof window.core !== 'undefined'"
-                            )
-                            await self.page.expose_function(
-                                "saveChunk", self.save_chunk
-                            )
-                            input = self.page.locator("#file-input")
-                            if self.assets:
-                                await input.set_input_files(self.assets[0])
-                            continue
-                    logger.exception(
-                        f"Failed to evaluate JavaScript after {max_retries} attempts"
-                    )
-
-        raise RuntimeError(
-            f"Failed to evaluate JavaScript after {max_retries} attempts: {str(last_error)}"
-        )
+            logger.info(f"JavaScript evaluation result: {result}")
+            return result
+        except Exception as e:
+            return str(e)
 
     def forward(
         self,
@@ -239,9 +213,9 @@ class VideoEditorTool(Tool):
         js_code: str = """
         // Default example: Create a 150 frames subclip
         const videoFile = assets()[0];
-        const video = new core.VideoClip(videoFile).subclip(0, 150);
+        const video = new core.VideoClip(videoFile);
         await composition.add(video);
-        await render();
+        await sample();
         """,
         output: str = "output/video.mp4",
     ) -> Any:
@@ -293,3 +267,8 @@ class VideoEditorTool(Tool):
         except Exception:
             logger.exception("Video editing task failed")
             raise
+
+
+if __name__ == "__main__":
+    tool = VideoEditorTool()
+    tool.forward()
