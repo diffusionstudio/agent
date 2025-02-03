@@ -3,7 +3,7 @@ from core_tool import VideoEditorTool
 from visual_feedback_tool import VisualFeedbackTool
 from docs_embedder import DocsSearchTool, ensure_collection_exists
 from config import ANTHROPIC_API_KEY
-from prompts import SYSTEM_PROMPT
+from prompts import get_system_prompt
 import asyncio
 
 
@@ -29,7 +29,7 @@ def main():
             temperature=0.0,
             api_key=ANTHROPIC_API_KEY,
         ),
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=get_system_prompt(),
     )
 
     # Example of using both tools in sequence
