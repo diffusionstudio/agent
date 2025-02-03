@@ -33,7 +33,8 @@ def main():
     # Example of using both tools in sequence
     agent.run("""
     1. Clip big buck bunny to 150 frames, add it to the composition and render the result
-    2. After rendering, analyze the output video to verify smooth transitions and quality
+    2. Dont render just use `await sample()` first and wait for claude feedback
+    3. After claude feedback, render the video and analyze the output video to verify smooth transitions and quality
     """)
 
 

@@ -84,23 +84,30 @@ class VideoEditorTool(Tool):
         try:
             # Remove the data URL prefix and decode base64
             base64_data = data.replace("data:image/png;base64,", "")
+            logger.debug(f"Base64 data: {base64_data}")
             buffer = base64.b64decode(base64_data)
+            logger.debug(f"Buffer: {buffer}")
 
             # Get output directory and create if it doesn't exist
             output_dir = "./samples"
             os.makedirs(output_dir, exist_ok=True)
+            logger.debug(f"Output directory: {output_dir}")
 
             # Generate sample filename
             sample_count = len(
                 [f for f in os.listdir(output_dir) if f.startswith("sample-")]
             )
             sample_path = os.path.join(output_dir, f"sample-{sample_count}.png")
+            logger.debug(f"Sample path: {sample_path}")
 
             # Save to filesystem
             with open(sample_path, "wb") as f:
                 f.write(buffer)
-
             logger.debug(f"Saved sample image to {sample_path}")
+
+            logger.debug(
+                f"Content of {output_dir}: {os.listdir(os.path.join(os.path.dirname(__file__), output_dir))}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to save sample: {str(e)}")
@@ -149,8 +156,10 @@ class VideoEditorTool(Tool):
 
             self.page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
             await self.page.expose_function("saveChunk", self.save_chunk)
-            await self.page.expose_function("saveSample", self.save_sample)
             logger.debug("Exposed save_chunk function to browser")
+
+            await self.page.expose_function("saveSample", self.save_sample)
+            logger.debug("Exposed save_sample function to browser")
 
             logger.info(f"Setting input file: {self.assets[0]}")
             await input.set_input_files(self.assets[0])
@@ -160,7 +169,11 @@ class VideoEditorTool(Tool):
             logger.exception(f"Failed to launch editor: {str(e)}")
             raise
 
-    async def evaluate(self, js_code: str, max_retries: int = 3) -> str:
+    async def evaluate(
+        self,
+        js_code: str,
+        max_retries: int = 3,
+    ) -> str:
         if not self.page:
             logger.error("Page not initialized when trying to evaluate JavaScript")
             raise ValueError("Page not initialized")
@@ -261,7 +274,17 @@ class VideoEditorTool(Tool):
                 try:
                     await self.launch_editor(playwright)
                     result = await self.evaluate(js_code)
-                    logger.info("Video editing task completed successfully")
+
+                    logger.debug("Video editing task completed successfully")
+
+                    # call claude
+
+                    # delete all files in output_dir
+
+                    # if call claude is successful we move on if not we try again with feedback from claude
+
+                    # Rendering with await render() after claude feedback looks good
+
                     return result
                 finally:
                     if self.browser:
