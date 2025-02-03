@@ -1,5 +1,5 @@
-from smolagents import CODE_SYSTEM_PROMPT
 import requests
+from smolagents import CODE_SYSTEM_PROMPT
 
 DOCUMENT_CONTEXT_PROMPT = """
 <document>

@@ -29,7 +29,7 @@ from utils import (
     normalize_code,
     normalize_path,
 )
-from config import COLLECTION_NAME, EMBEDDING_DIM, QDRANT_PATH
+from config import settings
 from prompts import QUERY_PROMPT
 from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
@@ -38,7 +38,7 @@ import hashlib
 import unicodedata
 import ftfy
 
-client = QdrantClient(path=QDRANT_PATH)
+client = QdrantClient(path=settings.qdrant_path)
 logger.info("Connected to Qdrant DB")
 
 
@@ -127,7 +127,8 @@ async def search_docs(
         logger.debug("Connected to vector DB")
 
         # Generate embedding for query
-        query_embedding = await generate_embeddings(QUERY_PROMPT + query)
+        query_embeddings = await generate_embeddings(QUERY_PROMPT + query)
+        query_embedding = query_embeddings[0]  # Take first embedding
         logger.debug(f"Generated query embedding of size {len(query_embedding)}")
 
         # Build filter if conditions provided
@@ -159,7 +160,7 @@ async def search_docs(
             f"Fetching top {vector_limit} results{' for reranking' if rerank_results else ''}"
         )
         search_results = client.query_points(
-            collection_name=COLLECTION_NAME,
+            collection_name=settings.collection_name,
             query=query_embedding,
             query_filter=search_filter,
             limit=vector_limit,
@@ -240,16 +241,16 @@ async def ensure_collection_exists():
     try:
         # Create collection if it doesn't exist
         try:
-            client.get_collection(COLLECTION_NAME)
-            logger.info(f"Using existing collection: {COLLECTION_NAME}")
+            client.get_collection(settings.collection_name)
+            logger.info(f"Using existing collection: {settings.collection_name}")
         except (ValueError, KeyError):
             client.create_collection(
-                collection_name=COLLECTION_NAME,
+                collection_name=settings.collection_name,
                 vectors_config=VectorParams(
-                    size=EMBEDDING_DIM, distance=Distance.COSINE
+                    size=settings.embedding_dim, distance=Distance.COSINE
                 ),
             )
-            logger.info(f"Created new collection: {COLLECTION_NAME}")
+            logger.info(f"Created new collection: {settings.collection_name}")
 
         return client
     except Exception as e:
@@ -287,7 +288,7 @@ async def auto_embed_pipeline(
             has_embeddings = False
             try:
                 results = client.query_points(
-                    collection_name=COLLECTION_NAME,
+                    collection_name=settings.collection_name,
                     query_filter=Filter(
                         must=[FieldCondition(key="source", match=MatchText(text=url))]
                     ),
@@ -327,7 +328,7 @@ async def auto_embed_pipeline(
         # Clear existing URL content if any
         try:
             client.delete(
-                collection_name=COLLECTION_NAME,
+                collection_name=settings.collection_name,
                 points_selector=Filter(
                     must=[FieldCondition(key="source", match=MatchText(text=url))]
                 ),
@@ -717,7 +718,7 @@ async def upload_points_batch(points: List[PointStruct]):
     try:
         logger.info(f"Uploading batch of {len(points)} points...")
         client.upload_points(
-            collection_name=COLLECTION_NAME,
+            collection_name=settings.collection_name,
             points=points,
             batch_size=32,
         )

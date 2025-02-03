@@ -7,6 +7,7 @@ from utils import clear_file_path
 from smolagents import Tool
 from typing import Optional, Any
 from loguru import logger
+from config import settings
 
 
 class VideoEditorTool(Tool):
@@ -48,8 +49,12 @@ class VideoEditorTool(Tool):
         self.browser: Optional[Browser] = None  # Remote browser instance
         self.output: Optional[str] = None  # Output video path
         self.assets: Optional[list[str]] = None  # Input video files
-        self.executable_path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH") # Path to the browser executable
-        self.web_socket_url = os.getenv("PLAYWRIGHT_WEB_SOCKET_URL") # Web socket url to connect to the browser
+        self.executable_path = (
+            settings.playwright_chromium_executable_path
+        )  # Path to the browser executable
+        self.web_socket_url = (
+            settings.playwright_web_socket_url
+        )  # Web socket url to connect to the browser
         logger.info("VideoEditorTool initialized")
 
     def save_chunk(self, data: list[int], position: int) -> None:
@@ -75,30 +80,31 @@ class VideoEditorTool(Tool):
 
     def save_sample(self, data: str) -> None:
         """Saves a sample video to the output directory."""
-        
+
         try:
             # Remove the data URL prefix and decode base64
-            base64_data = data.replace('data:image/png;base64,', '')
+            base64_data = data.replace("data:image/png;base64,", "")
             buffer = base64.b64decode(base64_data)
-            
+
             # Get output directory and create if it doesn't exist
-            output_dir = './samples'
+            output_dir = "./samples"
             os.makedirs(output_dir, exist_ok=True)
-            
+
             # Generate sample filename
-            sample_count = len([f for f in os.listdir(output_dir) if f.startswith('sample-')])
-            sample_path = os.path.join(output_dir, f'sample-{sample_count}.png')
-            
+            sample_count = len(
+                [f for f in os.listdir(output_dir) if f.startswith("sample-")]
+            )
+            sample_path = os.path.join(output_dir, f"sample-{sample_count}.png")
+
             # Save to filesystem
-            with open(sample_path, 'wb') as f:
+            with open(sample_path, "wb") as f:
                 f.write(buffer)
-            
+
             logger.debug(f"Saved sample image to {sample_path}")
-            
+
         except Exception as e:
             logger.error(f"Failed to save sample: {str(e)}")
             raise
-        
 
     def _ensure_output_directory(self, output_path: str) -> None:
         """Ensure the output directory exists."""
@@ -119,11 +125,15 @@ class VideoEditorTool(Tool):
 
             if self.web_socket_url:
                 logger.info("Connecting to remote browser...")
-                self.browser = await playwright.chromium.connect_over_cdp(self.web_socket_url)
+                self.browser = await playwright.chromium.connect_over_cdp(
+                    self.web_socket_url
+                )
                 logger.debug("Connected to remote browser")
             else:
                 logger.info("Launching local browser...")
-                self.browser = await playwright.chromium.launch(executable_path=self.executable_path)
+                self.browser = await playwright.chromium.launch(
+                    executable_path=self.executable_path
+                )
                 logger.debug("Local browser launched")
 
             self.page = await self.browser.new_page()
