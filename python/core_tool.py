@@ -1,5 +1,6 @@
 import os
 import asyncio
+import base64
 
 from playwright.async_api import async_playwright, Playwright, Page, Browser
 from utils import clear_file_path
@@ -72,6 +73,33 @@ class VideoEditorTool(Tool):
             logger.error(f"Failed to save chunk: {str(e)}")
             raise
 
+    def save_sample(self, data: str) -> None:
+        """Saves a sample video to the output directory."""
+        
+        try:
+            # Remove the data URL prefix and decode base64
+            base64_data = data.replace('data:image/png;base64,', '')
+            buffer = base64.b64decode(base64_data)
+            
+            # Get output directory and create if it doesn't exist
+            output_dir = './samples'
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate sample filename
+            sample_count = len([f for f in os.listdir(output_dir) if f.startswith('sample-')])
+            sample_path = os.path.join(output_dir, f'sample-{sample_count}.png')
+            
+            # Save to filesystem
+            with open(sample_path, 'wb') as f:
+                f.write(buffer)
+            
+            logger.debug(f"Saved sample image to {sample_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save sample: {str(e)}")
+            raise
+        
+
     def _ensure_output_directory(self, output_path: str) -> None:
         """Ensure the output directory exists."""
         output_dir = os.path.dirname(output_path)
@@ -111,6 +139,7 @@ class VideoEditorTool(Tool):
 
             self.page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
             await self.page.expose_function("saveChunk", self.save_chunk)
+            await self.page.expose_function("saveSample", self.save_sample)
             logger.debug("Exposed save_chunk function to browser")
 
             logger.info(f"Setting input file: {self.assets[0]}")
