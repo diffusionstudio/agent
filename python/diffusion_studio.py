@@ -10,7 +10,7 @@ class DiffusionClient:
     """Client for the Diffusion Studio editor."""
 
     def __init__(self):
-        self.playwright: async_playwright
+        self.playwright: Playwright
         self.browser: Browser
         self.page: Page
         self.output: Optional[str] = None
