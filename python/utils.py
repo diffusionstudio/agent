@@ -5,13 +5,7 @@ from loguru import logger
 from anthropic import AsyncAnthropic
 from anthropic.types import Usage, TextBlock
 from openai import AsyncOpenAI
-from config import (
-    INFINITY_BASE_URL,
-    INFINITY_API_KEY,
-    ANTHROPIC_API_KEY,
-    MAX_RETRIES,
-    RETRY_DELAY,
-)
+from config import settings
 from prompts import DOCUMENT_CONTEXT_PROMPT, CHUNK_CONTEXT_PROMPT
 from pathlib import Path
 from typing import List, Dict
@@ -19,7 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 import re
 
-client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 
 def clear_file_path(path: str) -> None:
@@ -42,7 +36,9 @@ def clear_file_path(path: str) -> None:
         raise
 
 
-async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RETRIES):
+async def generate_embeddings(
+    text: str | list[str], timeout=30, retries=settings.max_retries
+) -> list[list[float]]:
     """
     Generate embeddings for the given text using Infinity API.
 
@@ -54,7 +50,9 @@ async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RET
     Returns:
         list[list[float]]: List of embeddings for each input text
     """
-    client = AsyncOpenAI(api_key=INFINITY_API_KEY, base_url=INFINITY_BASE_URL)
+    client = AsyncOpenAI(
+        api_key=settings.infinity_api_key, base_url=settings.infinity_base_url
+    )
     last_error = None
 
     for attempt in range(retries):
@@ -63,19 +61,19 @@ async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RET
                 f"Making embedding request with {len(text) if isinstance(text, list) else 1} texts"
             )
             response = await client.embeddings.create(
-                model="mixedbread-ai/mxbai-embed-large-v1",
+                model=settings.infinity_embedding_model,
                 input=text if isinstance(text, list) else [text],
             )
             embeddings = [data.embedding for data in response.data]
             logger.debug("Got embeddings successfully")
-            return embeddings if isinstance(text, list) else embeddings[0]
+            return embeddings
 
         except Exception as e:
             last_error = e
             logger.warning(f"Error during embedding attempt {attempt + 1}: {str(e)}")
 
             if attempt < retries - 1:
-                delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
+                delay = settings.retry_delay * (attempt + 1)  # Exponential backoff
                 logger.warning(
                     f"Embedding attempt {attempt + 1} failed. Retrying in {delay}s..."
                 )
@@ -86,7 +84,9 @@ async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RET
     raise RuntimeError(f"{error_msg}: {str(last_error)}")
 
 
-async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRIES):
+async def rerank(
+    query: str, documents: list[str], timeout=30, retries=settings.max_retries
+):
     """
     Rerank documents based on relevance to query using Infinity reranking API.
 
@@ -104,9 +104,9 @@ async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRI
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{INFINITY_BASE_URL}/rerank",
+                    f"{settings.infinity_base_url}/rerank",
                     json={
-                        "model": "mixedbread-ai/mxbai-rerank-base-v1",
+                        "model": settings.infinity_rerank_model,
                         "query": query,
                         "documents": documents,
                     },
@@ -130,7 +130,7 @@ async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRI
             )
 
         if attempt < retries - 1:
-            delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
+            delay = settings.retry_delay * (attempt + 1)  # Exponential backoff
             logger.warning(
                 f"Reranking attempt {attempt + 1} failed. Retrying in {delay}s..."
             )
@@ -147,7 +147,7 @@ async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRI
 
 
 async def situate_context(
-    doc: str, chunk: str, retries=MAX_RETRIES
+    doc: str, chunk: str, retries=settings.max_retries
 ) -> tuple[str, Usage]:
     """
     Uses Claude to understand where a chunk of text fits within a larger document context.
@@ -191,7 +191,7 @@ async def situate_context(
         except Exception as e:
             last_error = e
             if attempt < retries - 1:
-                delay = RETRY_DELAY * (attempt + 1)
+                delay = settings.retry_delay * (attempt + 1)
                 logger.warning(
                     f"Context generation attempt {attempt + 1} failed: {str(e)}. Retrying in {delay}s..."
                 )
