@@ -1,13 +1,8 @@
-import os
-import asyncio
-import base64
-
-from playwright.async_api import async_playwright, Playwright, Page, Browser
 from utils import clear_file_path
 from smolagents import Tool
-from typing import Optional, Any
+from typing import Any
 from loguru import logger
-from config import settings
+from diffusion_studio import DiffusionClient
 
 
 class VideoEditorTool(Tool):
@@ -42,170 +37,11 @@ class VideoEditorTool(Tool):
     }
     output_type = "string"
 
-    def __init__(self):
+    def __init__(self, client: DiffusionClient):
         """Initialize the tool with empty state. State is populated in forward()."""
         super().__init__()
-        self.page: Optional[Page] = None  # Browser page for editor
-        self.browser: Optional[Browser] = None  # Remote browser instance
-        self.output: Optional[str] = None  # Output video path
-        self.assets: Optional[list[str]] = None  # Input video files
-        self.executable_path = (
-            settings.playwright_chromium_executable_path
-        )  # Path to the browser executable
-        self.web_socket_url = (
-            settings.playwright_web_socket_url
-        )  # Web socket url to connect to the browser
-        logger.info("VideoEditorTool initialized")
-
-    def save_chunk(self, data: list[int], position: int) -> None:
-        """Writes the received video chunk at the specified position."""
-        if not self.output:
-            logger.error("Output path not set when trying to save chunk")
-            raise ValueError("Output path not set")
-
-        try:
-            # Create file if it doesn't exist
-            if not os.path.exists(self.output):
-                with open(self.output, "wb") as f:
-                    pass  # Create empty file
-                logger.debug(f"Created empty output file: {self.output}")
-
-            with open(self.output, "r+b") as f:
-                f.seek(position)
-                f.write(bytearray(data))
-            logger.debug(f"Saved chunk of size {len(data)} at position {position}")
-        except Exception as e:
-            logger.error(f"Failed to save chunk: {str(e)}")
-            raise
-
-    def save_sample(self, data: str) -> None:
-        """Saves a sample video to the output directory."""
-
-        try:
-            # Remove the data URL prefix and decode base64
-            base64_data = data.replace("data:image/png;base64,", "")
-            logger.debug(f"Base64 data: {base64_data}")
-            buffer = base64.b64decode(base64_data)
-            logger.debug(f"Buffer: {buffer}")
-
-            # Get output directory and create if it doesn't exist
-            output_dir = "./samples"
-            os.makedirs(output_dir, exist_ok=True)
-            logger.debug(f"Output directory: {output_dir}")
-
-            # Generate sample filename
-            sample_count = len(
-                [f for f in os.listdir(output_dir) if f.startswith("sample-")]
-            )
-            sample_path = os.path.join(output_dir, f"sample-{sample_count}.png")
-            logger.debug(f"Sample path: {sample_path}")
-
-            # Save to filesystem
-            with open(sample_path, "wb") as f:
-                f.write(buffer)
-            logger.debug(f"Saved sample image to {sample_path}")
-
-            logger.debug(
-                f"Content of {output_dir}: {os.listdir(os.path.join(os.path.dirname(__file__), output_dir))}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to save sample: {str(e)}")
-            raise
-
-    def _ensure_output_directory(self, output_path: str) -> None:
-        """Ensure the output directory exists."""
-        output_dir = os.path.dirname(output_path)
-        if output_dir:  # Only create if there's a directory part
-            logger.debug(f"Creating output directory: {output_dir}")
-            os.makedirs(output_dir, exist_ok=True)
-
-    async def launch_editor(self, playwright: Playwright):
-        """Connects to the remote browser with API key. And sets up the editor."""
-        if not self.output or not self.assets:
-            logger.error("Output path or assets not set when launching editor")
-            raise ValueError("Output path or assets not set")
-
-        try:
-            # Ensure output directory exists
-            self._ensure_output_directory(self.output)
-
-            if self.web_socket_url:
-                logger.debug("Connecting to remote browser via websocket ...")
-                self.browser = await playwright.chromium.connect_over_cdp(
-                    self.web_socket_url
-                )
-                logger.debug("Connected to remote browser via websocket")
-            else:
-                logger.info("Launching local browser...")
-                self.browser = await playwright.chromium.launch(
-                    executable_path=self.executable_path
-                )
-                logger.debug("Local browser launched")
-
-            self.page = await self.browser.new_page()
-            logger.debug("Created new page")
-
-            logger.info("Loading editor interface...")
-            await self.page.goto("https://operator.diffusion.studio")
-            await self.page.wait_for_function("typeof window.core !== 'undefined'")
-            logger.debug("Editor interface loaded")
-
-            input = self.page.locator("#file-input")
-            logger.info("Received file input reference:", bool(input))
-
-            self.page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
-            await self.page.expose_function("saveChunk", self.save_chunk)
-            logger.debug("Exposed save_chunk function to browser")
-
-            await self.page.expose_function("saveSample", self.save_sample)
-            logger.debug("Exposed save_sample function to browser")
-
-            logger.info(f"Setting input file: {self.assets[0]}")
-            await input.set_input_files(self.assets[0])
-            logger.debug("Input file set successfully")
-
-        except Exception as e:
-            logger.exception(f"Failed to launch editor: {str(e)}")
-            raise
-
-    async def evaluate(
-        self,
-        js_code: str,
-    ) -> str:
-        """Evaluates the JavaScript code in the browser."""
-
-        if not self.page:
-            logger.error("Page not initialized when trying to evaluate JavaScript")
-            raise ValueError("Page not initialized")
-
-        try:
-            logger.info("Evaluating JavaScript code...")
-
-            logger.debug(f"JavaScript code:\n{js_code}")
-
-            result = await self.page.evaluate(
-                f"""
-            async () => {{
-                try {{
-                    {js_code}
-                    return 'success';
-                }} catch (e) {{
-                    console.error(e.message);
-                    console.error(e.stack);
-                    return 'error';
-                }}
-            }}
-            """
-            )
-
-            if not isinstance(result, str):
-                result = "error"
-
-            logger.info(f"JavaScript evaluation result: {result}")
-            return result
-        except Exception as e:
-            return str(e)
+        self.client: DiffusionClient = client
+        logger.debug("DiffusionClient initialized")
 
     def forward(
         self,
@@ -215,60 +51,37 @@ class VideoEditorTool(Tool):
         const videoFile = assets()[0];
         const video = new core.VideoClip(videoFile);
         await composition.add(video);
-        await sample();
         """,
         output: str = "output/video.mp4",
     ) -> Any:
         """Main execution method that processes the video editing task."""
-        logger.info(f"Starting video editing task with assets: {assets}")
-        logger.debug(f"Output path: {output}")
 
-        # Always create a new event loop and run to completion
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(
-                self._async_forward(assets, js_code, output)
-            )
-            logger.info("Video editing completed synchronously")
-            return result
-        finally:
-            loop.close()
-            logger.debug("Event loop closed")
-
-    async def _async_forward(self, assets: list[str], js_code: str, output: str) -> str:
-        """Async implementation of the forward method."""
         try:
             self.assets = assets
             self.output = output
             clear_file_path(output)
             logger.debug("State initialized")
 
-            async with async_playwright() as playwright:
-                try:
-                    await self.launch_editor(playwright)
-                    result = await self.evaluate(js_code)
+            if self.client.page:
+                self.input = self.client.page.locator("#file-input")
+                logger.info("Received file input reference:", bool(self.input))
+            else:
+                raise Exception("Page not found")
 
-                    logger.debug("Video editing task completed successfully")
+            logger.info(f"Setting input file: {self.assets[0]}")
+            self.input.set_input_files(self.assets[0])
+            logger.debug("Input file set successfully")
 
-                    # call claude
+            result = self.client.evaluate(js_code)
+            logger.debug("Video editing task completed successfully")
+            return result
 
-                    # delete all files in output_dir
-
-                    # if call claude is successful we move on if not we try again with feedback from claude
-
-                    # Rendering with await render() after claude feedback looks good
-
-                    return result
-                finally:
-                    if self.browser:
-                        logger.debug("Closing browser")
-                        await self.browser.close()
-        except Exception:
+        except Exception as e:
             logger.exception("Video editing task failed")
-            raise
+            raise e
 
 
 if __name__ == "__main__":
-    tool = VideoEditorTool()
+    client = DiffusionClient()
+    tool = VideoEditorTool(client=client)
     tool.forward()

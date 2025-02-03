@@ -5,6 +5,7 @@ from visual_feedback_tool import VisualFeedbackTool
 from docs_embedder import DocsSearchTool, ensure_collection_exists, auto_embed_pipeline
 from config import settings
 from prompts import get_system_prompt
+from diffusion_studio import DiffusionClient
 
 
 async def init_docs():
@@ -19,9 +20,14 @@ async def init_docs():
 def main():
     """Initialize docs collection and embeddings"""
     asyncio.run(init_docs())
+    client = DiffusionClient()
 
     agent = CodeAgent(
-        tools=[VideoEditorTool(), DocsSearchTool(), VisualFeedbackTool()],
+        tools=[
+            DocsSearchTool(),
+            VideoEditorTool(client=client),
+            VisualFeedbackTool(client=client),
+        ],
         model=LiteLLMModel(
             "anthropic/claude-3-5-sonnet-latest",
             temperature=0.0,
@@ -36,6 +42,7 @@ def main():
     2. Dont render just use `await sample()` first and wait for claude feedback
     3. After claude feedback, render the video and analyze the output video to verify smooth transitions and quality
     """)
+    client.close()
 
 
 if __name__ == "__main__":

@@ -48,7 +48,6 @@ dependencies = [
     "opencv-python>=4.11.0.86",
     "packaging==24.2",
     "pandas==2.2.3",
-    "pillow==11.1.0",
     "platformdirs==4.3.6",
     "playwright==1.49.1",
     "portalocker==2.10.1",
