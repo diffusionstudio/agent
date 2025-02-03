@@ -4,10 +4,10 @@ import asyncio
 from loguru import logger
 from anthropic import AsyncAnthropic
 from anthropic.types import Usage, TextBlock
+from openai import AsyncOpenAI
 from config import (
-    MXBAI_API_URL,
-    MXBAI_HEADERS,
-    MXBAI_RERANK_URL,
+    INFINITY_BASE_URL,
+    INFINITY_API_KEY,
     ANTHROPIC_API_KEY,
     MAX_RETRIES,
     RETRY_DELAY,
@@ -44,7 +44,7 @@ def clear_file_path(path: str) -> None:
 
 async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RETRIES):
     """
-    Generate embeddings for the given text using MXBAI API.
+    Generate embeddings for the given text using Infinity API.
 
     Args:
         text (str | list[str]): Text or list of texts to embed
@@ -54,62 +54,41 @@ async def generate_embeddings(text: str | list[str], timeout=30, retries=MAX_RET
     Returns:
         list[list[float]]: List of embeddings for each input text
     """
+    client = AsyncOpenAI(api_key=INFINITY_API_KEY, base_url=INFINITY_BASE_URL)
     last_error = None
+
     for attempt in range(retries):
         try:
-            async with httpx.AsyncClient() as client:
-                logger.debug(
-                    f"Making embedding request with {len(text) if isinstance(text, list) else 1} texts"
-                )
-                response = await client.post(
-                    MXBAI_API_URL,
-                    headers=MXBAI_HEADERS,
-                    json={"inputs": text if isinstance(text, list) else [text]},
-                    timeout=timeout,
-                )
-                response.raise_for_status()
-                embeddings = response.json()
-                logger.debug(f"Got response with status {response.status_code}")
-
-                if not embeddings:
-                    raise ValueError("Empty response from embedding API")
-
-                return embeddings if isinstance(text, list) else embeddings[0]
-
-        except httpx.TimeoutException as e:
-            last_error = e
-            logger.warning(f"Timeout during embedding attempt {attempt + 1}: {str(e)}")
-        except httpx.RequestError as e:
-            last_error = e
-            logger.warning(
-                f"Request error during embedding attempt {attempt + 1}: {str(e)}"
+            logger.debug(
+                f"Making embedding request with {len(text) if isinstance(text, list) else 1} texts"
             )
+            response = await client.embeddings.create(
+                model="mixedbread-ai/mxbai-embed-large-v1",
+                input=text if isinstance(text, list) else [text],
+            )
+            embeddings = [data.embedding for data in response.data]
+            logger.debug("Got embeddings successfully")
+            return embeddings if isinstance(text, list) else embeddings[0]
+
         except Exception as e:
             last_error = e
-            logger.warning(
-                f"Unexpected error during embedding attempt {attempt + 1}: {str(e)}"
-            )
+            logger.warning(f"Error during embedding attempt {attempt + 1}: {str(e)}")
 
-        if attempt < retries - 1:
-            delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
-            logger.warning(
-                f"Embedding attempt {attempt + 1} failed. Retrying in {delay}s..."
-            )
-            await asyncio.sleep(delay)
-            continue
+            if attempt < retries - 1:
+                delay = RETRY_DELAY * (attempt + 1)  # Exponential backoff
+                logger.warning(
+                    f"Embedding attempt {attempt + 1} failed. Retrying in {delay}s..."
+                )
+                await asyncio.sleep(delay)
+                continue
 
     error_msg = f"Request failed after {retries} attempts"
-    if isinstance(last_error, httpx.TimeoutException):
-        raise TimeoutError(f"{error_msg}: Timeout - {str(last_error)}")
-    elif isinstance(last_error, httpx.RequestError):
-        raise RuntimeError(f"{error_msg}: Request failed - {str(last_error)}")
-    else:
-        raise RuntimeError(f"{error_msg}: {str(last_error)}")
+    raise RuntimeError(f"{error_msg}: {str(last_error)}")
 
 
 async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRIES):
     """
-    Rerank documents based on relevance to query using MXBAI reranking API.
+    Rerank documents based on relevance to query using Infinity reranking API.
 
     Args:
         query (str): The query text to compare documents against
@@ -119,26 +98,23 @@ async def rerank(query: str, documents: list[str], timeout=30, retries=MAX_RETRI
 
     Returns:
         list[float]: List of relevance scores between 0 and 1 for each document
-
-    Raises:
-        TimeoutError: If request times out after all retries
-        RuntimeError: If request fails for any other reason after all retries
     """
     last_error = None
     for attempt in range(retries):
         try:
-            payload = {
-                "inputs": [{"text": query, "text_pair": doc} for doc in documents]
-            }
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    MXBAI_RERANK_URL,
-                    headers=MXBAI_HEADERS,
-                    json=payload,
+                    f"{INFINITY_BASE_URL}/rerank",
+                    json={
+                        "model": "mixedbread-ai/mxbai-rerank-base-v1",
+                        "query": query,
+                        "documents": documents,
+                    },
                     timeout=timeout,
                 )
                 response.raise_for_status()
                 return response.json()
+
         except httpx.TimeoutException as e:
             last_error = e
             logger.warning(f"Timeout during reranking attempt {attempt + 1}: {str(e)}")
