@@ -37,7 +37,7 @@ class DocsSearchTool(Tool):
 
     def __init__(self):
         ensure_collection_exists()
-        auto_embed_pipeline(url=settings.url, hash_file=settings.hash_file)
+        auto_embed_pipeline(url=f"{settings.url}/llms.txt", hash_file=settings.hash_file)
 
     def forward(
         self,

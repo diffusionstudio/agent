@@ -1,5 +1,6 @@
 import base64
 import os
+import atexit
 from playwright.sync_api import sync_playwright, Playwright, Page, Browser
 from typing import Optional, cast
 from loguru import logger
@@ -18,6 +19,7 @@ class DiffusionClient:
         self.executable_path = settings.playwright_chromium_executable_path
         self.web_socket_url = settings.playwright_web_socket_url
         self.init()  # Auto-initialize
+        atexit.register(self.close)  # Auto-close on exit
 
     def init(self):
         """Initialize the client"""
@@ -141,7 +143,7 @@ class DiffusionClient:
 
             logger.info("Loading editor interface...")
             page = cast(Page, self.page)  # Type assertion for mypy
-            page.goto("https://operator.diffusion.studio")
+            page.goto(settings.url)
             page.wait_for_function("typeof window.core !== 'undefined'")
             logger.debug("Editor interface loaded")
 
