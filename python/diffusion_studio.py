@@ -1,6 +1,6 @@
 import base64
 import os
-from playwright.async_api import async_playwright, Playwright, Page, Browser
+from playwright.sync_api import sync_playwright, Playwright, Page, Browser
 from typing import Optional, cast
 from loguru import logger
 from config import settings
@@ -10,17 +10,19 @@ class DiffusionClient:
     """Client for the Diffusion Studio editor."""
 
     def __init__(self):
+        """Initialize the Diffusion Studio client."""
         self.playwright: Playwright
         self.browser: Browser
         self.page: Page
         self.output: Optional[str] = None
         self.executable_path = settings.playwright_chromium_executable_path
         self.web_socket_url = settings.playwright_web_socket_url
+        self.init()  # Auto-initialize
 
-    async def init(self):
-        """Initialize the client asynchronously"""
-        self.playwright = await async_playwright().start()
-        await self.launch_editor(self.playwright)
+    def init(self):
+        """Initialize the client"""
+        self.playwright = sync_playwright().start()
+        self.launch_editor(self.playwright)
 
     def save_chunk(self, data: list[int], position: int) -> None:
         """Writes the received video chunk at the specified position."""
@@ -77,55 +79,52 @@ class DiffusionClient:
             logger.debug(f"Creating output directory: {output_dir}")
             os.makedirs(output_dir, exist_ok=True)
 
-    async def evaluate(
-        self,
-        js_code: str,
-    ) -> str:
+    def evaluate(self, js_code: str) -> str:
         """Evaluates the JavaScript code in the browser."""
+        logger.info(f"Client received JS code: {js_code}")
+
         if not self.page:
             logger.error("Page not initialized when trying to evaluate JavaScript")
             raise ValueError("Page not initialized")
 
         try:
-            logger.info("Evaluating JavaScript code...")
-            logger.debug(f"JavaScript code:\n{js_code}")
+            logger.info("Client evaluating JavaScript code...")
 
-            result = await self.page.evaluate(
-                f"""
-            async () => {{
+            # Wrap the code in an async IIFE (Immediately Invoked Function Expression)
+            wrapped_code = f"""
+            (async () => {{
                 try {{
-
                     {js_code}
                     return 'success';
                 }} catch (e) {{
                     console.error(e.message);
                     console.error(e.stack);
-                    return 'error';
+                    return 'error: ' + e.message;
                 }}
-            }}
+            }})()
             """
-            )
+
+            result = self.page.evaluate(wrapped_code)
 
             if not isinstance(result, str):
                 result = "error"
 
-            logger.info(f"JavaScript evaluation result: {result}")
+            logger.debug(f"JavaScript evaluation result: {result}")
             return result
+
         except Exception as e:
             return str(e)
 
-    async def launch_editor(self, playwright: Playwright):
+    def launch_editor(self, playwright: Playwright):
         """Connects to the remote browser with API key. And sets up the editor."""
         try:
             if self.web_socket_url:
                 logger.debug("Connecting to remote browser via websocket ...")
-                self.browser = await playwright.chromium.connect_over_cdp(
-                    self.web_socket_url
-                )
+                self.browser = playwright.chromium.connect_over_cdp(self.web_socket_url)
                 logger.debug("Connected to remote browser via websocket")
             else:
                 logger.info("Launching local browser...")
-                self.browser = await playwright.chromium.launch(
+                self.browser = playwright.chromium.launch(
                     executable_path=self.executable_path
                 )
                 logger.debug("Local browser launched")
@@ -133,7 +132,7 @@ class DiffusionClient:
             if not self.browser:
                 raise Exception("Browser not initialized")
 
-            page = await self.browser.new_page()
+            page = self.browser.new_page()
             if not page:
                 raise Exception("Page not created")
             self.page = cast(Page, page)
@@ -142,26 +141,26 @@ class DiffusionClient:
 
             logger.info("Loading editor interface...")
             page = cast(Page, self.page)  # Type assertion for mypy
-            await page.goto("https://operator.diffusion.studio")
-            await page.wait_for_function("typeof window.core !== 'undefined'")
+            page.goto("https://operator.diffusion.studio")
+            page.wait_for_function("typeof window.core !== 'undefined'")
             logger.debug("Editor interface loaded")
 
             page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
-            await page.expose_function("saveChunk", self.save_chunk)
+            page.expose_function("saveChunk", self.save_chunk)
             logger.debug("Exposed save_chunk function to browser")
 
-            await page.expose_function("saveSample", self.save_sample)
+            page.expose_function("saveSample", self.save_sample)
             logger.debug("Exposed save_sample function to browser")
 
         except Exception as e:
             logger.exception(f"Failed to launch editor: {str(e)}")
             raise
 
-    async def close(self):
+    def close(self):
         """Closes the browser and playwright."""
         if self.browser:
-            await self.browser.close()
+            self.browser.close()
             logger.debug("Browser closed")
         if self.playwright:
-            await self.playwright.stop()
+            self.playwright.stop()
             logger.debug("Playwright stopped")
