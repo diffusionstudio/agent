@@ -62,23 +62,14 @@ class VideoEditorTool(Tool):
         js_code: str = """
         // Default example: Create a 150 frames subclip
         const videoFile = assets()[0];
-        const video = new core.VideoClip(videoFile);
+        const video = new core.VideoClip(videoFile).subclip(0, 150);
         await composition.add(video);
         """,
         output: str = "output/video.mp4",
         ready_to_render: bool = False,
     ) -> Any:
         """Main execution method that processes the video editing task."""
-        return self._process_video(assets, js_code, output, ready_to_render)
 
-    def _process_video(
-        self,
-        assets: list[str],
-        js_code: str,
-        output: str,
-        ready_to_render: bool,
-    ) -> str:
-        """Sync implementation of the video processing method."""
         # Set output path and clear existing file
         self.client.output = output
         clear_file_path(output)
@@ -106,19 +97,9 @@ class VideoEditorTool(Tool):
         elif not ready_to_render and "sample()" not in js_code:
             js_code += f"\n{indentation}// Generate samples for analysis\n{indentation}await sample();"
 
-        # Execute JS code
         return self.client.evaluate(js_code)
 
-
 if __name__ == "__main__":
-
-    def test():
-        client = DiffusionClient()
-        client.init()
-        try:
-            tool = VideoEditorTool(client=client)
-            tool.forward()
-        finally:
-            client.close()
-
-    test()
+    client = DiffusionClient()
+    tool = VideoEditorTool(client=client)
+    tool.forward()
