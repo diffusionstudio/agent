@@ -1,242 +1,192 @@
-import cv2
 import os
 import tempfile
 import base64
-import asyncio
-from smolagents import Tool
-from typing import Dict, Any, List, Union
-from loguru import logger
+import time
 import anthropic
+import instructor
+from PIL import Image
+import io
+
+from pydantic import BaseModel, Field
+from smolagents import Tool
+from diffusion_studio import DiffusionClient
+from typing import Any, List, Optional
+from loguru import logger
+from core_tool import VideoEditorTool
 
 
-class ClaudeVisionTool:
-    def __init__(self):
-        self.client = anthropic.AsyncAnthropic()
-        self.model = "claude-3-5-sonnet-latest"
+class RenderDecision(BaseModel):
+    is_ok_overall: bool = Field(
+        ..., description="Whether the frames match the user requirements"
+    )
 
-    async def analyze_image(self, image_path: str, prompt: str) -> str:
-        """Analyze image using Claude Vision"""
-        try:
-            with open(image_path, "rb") as f:
-                image_data = base64.b64encode(f.read()).decode()
 
-            # Get media type from file extension
-            media_type = "image/jpeg" if image_path.endswith(".jpg") else "image/png"
-
-            message = await self.client.messages.create(
-                model=self.model,
-                max_tokens=4096,
-                temperature=0.5,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_data,
-                                },
-                            },
-                            {
-                                "type": "text",
-                                "text": prompt
-                                + "\nBe very concise - one short sentence per point.",
-                            },
-                        ],
-                    }
-                ],
-            )
-
-            # Extract text content from message
-            content = str(message.content[0])
-            if "TextBlock" in content:
-                import re
-
-                match = re.search(r"text=['\"]([^'\"]*)['\"]", content)
-                if match:
-                    return match.group(1).strip()
-            return content.strip()
-        except Exception as e:
-            logger.error(f"Error analyzing image {image_path}: {str(e)}")
-            return "Error analyzing frame"
-
-    async def analyze_images_batch(
-        self, image_paths: List[str], prompts: List[str]
-    ) -> List[str]:
-        """Analyze multiple images in parallel"""
-        tasks = [
-            self.analyze_image(img_path, prompt)
-            for img_path, prompt in zip(image_paths, prompts)
-        ]
-        return await asyncio.gather(*tasks)
+class FrameAnalysis(BaseModel):
+    composition_issues: Optional[List[str]] = Field(
+        default_factory=list, description="List of detected composition issues if any"
+    )
+    render_decision: RenderDecision = Field(
+        ..., description="Render decision based on overall composition quality"
+    )
 
 
 class VisualFeedbackTool(Tool):
     name = "visual_feedback"
-    description = """Analyzes a video after editing to verify if it meets the user's goals.
-    This tool is designed to be used after VideoEditorTool to validate if the edits achieved the desired outcome.
-    It extracts frames at regular intervals and uses Claude Vision to check for quality, consistency, and goal achievement."""
+    description = """
+    Analyzes video composition quality and makes render decisions taking into account the composition goal.
+    Works in conjunction with VideoEditorTool to validate edits before rendering.
+    """
 
     inputs = {
-        "video_path": {
-            "type": "string",
-            "description": "Path to the edited video file to analyze (output from VideoEditorTool)",
-            "nullable": False,
-            "required": True,
-        },
-        "interval_seconds": {
-            "type": "string",
-            "description": "Interval in seconds between frame captures. Recommended: 1s for short videos (<30s), 2s for medium (30-120s), 5s for long (>120s)",
-            "nullable": False,
-            "required": True,
-            "default": "5.0",  # Conservative default
-        },
         "final_goal": {
             "type": "string",
-            "description": "What the user wanted to achieve with their video edits (e.g., 'Remove all text overlays', 'Speed up slow sections')",
+            "description": "Quality criteria to evaluate (e.g. 'Ensure smooth transitions', 'Check for visual artifacts')",
             "nullable": False,
             "required": True,
         },
     }
     output_type = "object"
 
-    def __init__(self):
+    def __init__(self, client: DiffusionClient):
         super().__init__()
-        self.claude = ClaudeVisionTool()
+        # Use sync client
+        base_client = anthropic.Anthropic()
+        self.anthropic_client = instructor.from_anthropic(base_client)
+        self.model = "claude-3-5-sonnet-latest"
+        self.client = client
         self.temp_dir = tempfile.mkdtemp()
 
-    def _extract_frames(self, video_path: str, interval_seconds: float) -> List[str]:
-        """Extract frames from video at specified intervals"""
-        if not os.path.exists(video_path):
-            raise ValueError(f"Video file not found: {video_path}")
+    def _process_frames(self, frame_paths: List[str], final_goal: str) -> FrameAnalysis:
+        """Process frames with size optimization"""
+        MAX_IMAGE_SIZE_MB = 4.5  # Leaving some buffer from 5MB limit
+        MAX_IMAGES_PER_BATCH = 100
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise ValueError(f"Could not open video: {video_path}")
+        logger.info(f"Processing {len(frame_paths)} frames with goal: {final_goal}")
 
-        # Get video duration and validate interval
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        duration_seconds = total_frames / fps
+        def compress_image(image_path: str) -> bytes:
+            """Compress image to stay under size limit"""
+            with Image.open(image_path) as img:
+                original_size = os.path.getsize(image_path) / (1024 * 1024)
+                logger.debug(
+                    f"Compressing {image_path} (Original: {original_size:.2f}MB)"
+                )
 
-        # Adjust interval if it would produce too many frames
-        max_frames = 50  # Reasonable limit for API calls
-        if (duration_seconds / interval_seconds) > max_frames:
-            suggested_interval = duration_seconds / max_frames
-            logger.warning(
-                f"Interval {interval_seconds}s would produce too many frames. Using {suggested_interval:.1f}s instead"
-            )
-            interval_seconds = suggested_interval
+                # Convert to RGB if needed
+                if img.mode in ("RGBA", "P"):
+                    logger.debug(f"Converting {image_path} from {img.mode} to RGB")
+                    img = img.convert("RGB")
 
-        frame_interval = int(fps * interval_seconds)
-        frame_paths = []
-        frame_count = 0
+                # Start with quality=95
+                quality = 95
+                while True:
+                    buffer = io.BytesIO()
+                    img.save(buffer, format="JPEG", quality=quality, optimize=True)
+                    size_mb = buffer.tell() / (1024 * 1024)
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+                    if size_mb <= MAX_IMAGE_SIZE_MB or quality <= 30:
+                        logger.debug(
+                            f"Final compression: quality={quality}, size={size_mb:.2f}MB"
+                        )
+                        return buffer.getvalue()
 
-            if frame_count % frame_interval == 0:
-                frame_path = os.path.join(self.temp_dir, f"frame_{frame_count}.jpg")
-                cv2.imwrite(frame_path, frame)
-                frame_paths.append(frame_path)
+                    logger.debug(
+                        f"Size {size_mb:.2f}MB still too large, reducing quality from {quality} to {quality - 10}"
+                    )
+                    quality -= 10
 
-            frame_count += 1
-
-        cap.release()
-        return frame_paths
-
-    async def _process_frames(
-        self, frame_paths: List[str], interval_seconds: float, final_goal: str
-    ) -> Dict[str, Dict[str, str]]:
-        """Process all frames in parallel"""
-        prompts = [
-            f"""Analyze this frame for goal: '{final_goal}'
-Keep each answer to 10-15 words maximum:
-
-1. What's in the frame?
-2. Any quality issues?
-3. Good for transitions?"""
-            for _ in frame_paths
-        ]
+        prompt = f"""Analyze these frames for composition quality:
+        User composition goal: {final_goal}
+        """
 
         try:
-            analyses = await self.claude.analyze_images_batch(frame_paths, prompts)
+            all_issues = []
+            is_ok_overall = True
+            total_frames = len(frame_paths)
+            batch_size = min(MAX_IMAGES_PER_BATCH, total_frames)
 
-            # Clean up and format responses
-            results = {}
-            for i, (frame_path, analysis) in enumerate(zip(frame_paths, analyses)):
-                timestamp = f"{i * interval_seconds:.1f}s"
-                clean_analysis = analysis.replace("\\n", "\n").strip()
+            for batch_start in range(0, total_frames, batch_size):
+                batch = frame_paths[batch_start : batch_start + batch_size]
 
-                # Format points consistently
-                lines = []
-                points = ["1.", "2.", "3."]
-                for line in clean_analysis.split("\n"):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Remove any existing numbers
-                    for p in points:
-                        if p in line:
-                            line = line[line.find(p) + len(p) :].strip()
-                    lines.append(line)
+                message_content = []
+                for i, frame_name in enumerate(batch, 1):
+                    frame_path = os.path.join("samples", frame_name)
 
-                # Add correct numbering
-                formatted_lines = []
-                for j, line in enumerate(lines, 1):
-                    formatted_lines.append(f"{j}. {line}")
+                    # Compress image and get bytes
+                    image_bytes = compress_image(frame_path)
+                    image_data = base64.b64encode(image_bytes).decode()
 
-                results[timestamp] = {
-                    "frame_path": frame_path,
-                    "analysis": "\n".join(formatted_lines),
-                }
+                    message_content.extend(
+                        [
+                            {"type": "text", "text": f"Frame {batch_start + i}:"},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/jpeg",
+                                    "data": image_data,
+                                },
+                            },
+                        ]
+                    )
 
-            return results
+                message_content.append({"type": "text", "text": prompt})
+                logger.info(f"Processing batch of {len(batch)} frames")
+
+                batch_analysis = self.anthropic_client.messages.create(
+                    model=self.model,
+                    max_tokens=1024,
+                    messages=[{"role": "user", "content": message_content}],
+                    response_model=FrameAnalysis,
+                )
+
+                logger.debug(f"Batch analysis: {batch_analysis}")
+
+                if batch_analysis.composition_issues:
+                    all_issues.extend(batch_analysis.composition_issues)
+                is_ok_overall = (
+                    is_ok_overall and batch_analysis.render_decision.is_ok_overall
+                )
+
+                logger.debug(f"is_ok_overall: {is_ok_overall}")
+
+                # Cleanup batch frames
+                for frame_name in batch:
+                    frame_path = os.path.join("samples", frame_name)
+                    try:
+                        logger.debug(f"Deleting frame {frame_path}")
+                        os.remove(frame_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete frame {frame_path}: {e}")
+
+            return FrameAnalysis(
+                composition_issues=all_issues,
+                render_decision=RenderDecision(is_ok_overall=is_ok_overall),
+            )
+
         except Exception as e:
             logger.error(f"Error processing frames: {str(e)}")
-            return {"error": {"frame_path": "", "analysis": f"Error: {str(e)}"}}
+            return FrameAnalysis(
+                composition_issues=[str(e)],
+                render_decision=RenderDecision(is_ok_overall=False),
+            )
 
     def forward(
         self,
-        video_path: str | None = "output/video.mp4",
-        interval_seconds: Union[
-            str, float, None
-        ] = "1.0",  # Changed default to 1s for short videos
-        final_goal: str
-        | None = "The video should show a smooth transition between scenes without any glitches or artifacts",
+        final_goal: str = "The video should show a smooth transition between scenes without any glitches or artifacts.",
     ) -> Any:
-        """Process video and get feedback for frames"""
-        if not video_path:
-            video_path = "output/video.mp4"
-        if not interval_seconds:
-            interval_seconds = "5.0"
-        if not final_goal:
-            final_goal = "The video should show a smooth transition between scenes without any glitches or artifacts"
-
-        # Convert interval_seconds to float
-        interval_float = float(interval_seconds)
-
-        logger.info(f"Processing video: {video_path}")
-        logger.info(f"Extracting frames every {interval_float} seconds")
-        logger.info(f"Final goal: {final_goal}")
-
-        frame_paths = self._extract_frames(video_path, interval_float)
-
-        # Create event loop and run async processing
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        """Process video frames and get feedback."""
         try:
-            results = loop.run_until_complete(
-                self._process_frames(frame_paths, interval_float, final_goal)
+            frames = sorted(
+                [f for f in os.listdir("samples") if f.startswith("sample-")]
             )
-            logger.info("Completed video analysis")
+            logger.info(f"Found {len(frames)} frames to analyze")
+
+            results = self._process_frames(frames, final_goal)
             return results
-        finally:
-            loop.close()
+
+        except Exception as e:
+            logger.error("Video analysis failed")
+            raise e
 
     def __del__(self):
         """Cleanup temp files"""
@@ -247,19 +197,60 @@ Keep each answer to 10-15 words maximum:
 
 
 def main():
-    tool = VisualFeedbackTool()
-    results = tool.forward(
-        video_path="python/output/video.mp4",
-        interval_seconds="5.0",  # Now passing as string
-        final_goal="The video should show a smooth transition between scenes without any glitches or artifacts",
-    )
+    client = DiffusionClient()
 
-    # Print results in a readable format
-    for timestamp, data in results.items():
-        print(f"\n=== Frame at {timestamp} ===")
-        print(f"Frame path: {data['frame_path']}")
-        print(f"Analysis: {data['analysis']}")
-        print("=" * 50)
+    try:
+        core_tool = VideoEditorTool(client=client)
+        visual_feedback_tool = VisualFeedbackTool(client=client)
+
+        # Step 1: Composition
+        logger.info("🎬  Composing video...")
+        core_tool.forward(
+            assets=["assets/big_buck_bunny_1080p_30fps.mp4"],
+            js_code="""
+            // Create a 150 frames subclip
+            const videoFile = assets()[0];
+            const video = new core.VideoClip(videoFile).subclip(0, 150);
+            await composition.add(video);
+            """,
+            ready_to_render=False,  # Initial composition, will auto-append sample()
+        )
+
+        # Step 2: Analysis
+        logger.info("🔍 Analyzing composition...")
+        decision = visual_feedback_tool.forward(
+            final_goal="""Analyze the video composition focusing on:
+            1. Overall flow and pacing between scenes
+            2. Visual consistency and quality
+            3. Transition opportunities and potential issues
+
+            Minor imperfections are acceptable if they don't impact the viewing experience.
+            Focus on issues that would be noticeable to the average viewer."""
+        )
+
+        if decision.render_decision.is_ok_overall:
+            logger.info("✨ Final video rendered successfully!")
+
+            output_path = f"output/render_{int(time.time())}.mp4"
+
+            # Pass the decision status as ready_to_render flag
+            core_tool.forward(
+                assets=["assets/big_buck_bunny_1080p_30fps.mp4"],
+                js_code="""
+                // Create a 150 frames subclip
+                const videoFile = assets()[0];
+                const video = new core.VideoClip(videoFile).subclip(0, 150);
+                await composition.add(video);
+                """,
+                output=output_path,
+                ready_to_render=True,
+            )
+
+        else:
+            logger.warning("⚠️ Render skipped due to quality issues")
+
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":

@@ -6,3 +6,4 @@ python/embeddings/vector_db/*
 .env
 **/*.log
 .DS_Store
+**/samples/*
