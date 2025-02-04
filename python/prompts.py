@@ -1,5 +1,6 @@
 import requests
 from smolagents import CODE_SYSTEM_PROMPT
+from config import settings
 
 DOCUMENT_CONTEXT_PROMPT = """
 <document>
@@ -19,8 +20,13 @@ Answer only with the succinct context and nothing else.
 
 QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
 
+SYSTEM_PROMPT_RULES = """
+**Rules:**
+- Use the VideoEditorTool with render=False first and wait for VisualFeedbackTool
+- Depending on VisualFeedbackTool, use the VideoEditorTool with render=True to render the video
+"""
 
 def get_system_prompt():
-    result = requests.get("https://operator.diffusion.studio/system-prompt.txt")
+    result = requests.get(f"{settings.url}/system-prompt.txt")
 
-    return f"{CODE_SYSTEM_PROMPT}\n\n{result.text}"
+    return f"{CODE_SYSTEM_PROMPT}\n\n{result.text}\n\n{SYSTEM_PROMPT_RULES}"

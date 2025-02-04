@@ -28,8 +28,5 @@ agent = CodeAgent(
 agent.run(
     """
     Your goal is to clip big buck bunny to 150 frames, add it to the composition and render the result, assets/big_buck_bunny_1080p_30fps.mp4
-    Rules:
-    - Use the VideoEditorTool with render=False first and wait for VisualFeedbackTool
-    - Depending on VisualFeedbackTool, use the VideoEditorTool with render=True to render the video
     """
 )
