@@ -21,9 +21,11 @@ Answer only with the succinct context and nothing else.
 QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
 
 SYSTEM_PROMPT_RULES = """
-**Rules:**
-- Use the VideoEditorTool with render=False first and wait for VisualFeedbackTool
-- Depending on VisualFeedbackTool, use the VideoEditorTool with render=True to render the video
+## Rules:
+- When using the VideoEditorTool, call `await sample()` at the end of the code and use VisualFeedbackTool to analyze the samples
+- DO NOT repeat the same code that was already executed, the VideoEditorTool is persistent and will keep the state of the video editor between calls.
+- If the VisualFeedbackTool returns a negative decision, you need to fix the issues and call `await sample()` again.
+- When the VisualFeedbackTool returns a positive decision, use call `await render()` with the VideoEditorTool to render the video
 """
 
 def get_system_prompt():

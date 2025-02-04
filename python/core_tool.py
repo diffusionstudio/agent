@@ -23,8 +23,8 @@ class VideoEditorTool(Tool):
     - Splitting: `await video.split(split_frames)`
 
     - Adding to timeline: `await composition.add(clip)`
-    - Rendering: `await render()` (requires ready_to_render=True)
-    - Sampling: `await sample()` (auto-added when ready_to_render=False)
+    - Sampling: `await sample()`
+    - Rendering: `await render()` // when composition is ready to be rendered
     """
     inputs = {
         "assets": {
@@ -40,11 +40,6 @@ class VideoEditorTool(Tool):
         "output": {
             "type": "string",
             "description": "Output path for the processed video (only used when rendering)",
-            "nullable": False,
-        },
-        "ready_to_render": {
-            "type": "boolean",
-            "description": "Controls whether to render (True) or sample for analysis (False). Will strip render() if False, ensure render() if True",
             "nullable": False,
         },
     }
@@ -66,7 +61,6 @@ class VideoEditorTool(Tool):
         await composition.add(video);
         """,
         output: str = "output/video.mp4",
-        ready_to_render: bool = False,
     ) -> Any:
         """Main execution method that processes the video editing task."""
 
@@ -80,22 +74,6 @@ class VideoEditorTool(Tool):
 
         input_element = self.client.page.locator("#file-input")
         input_element.set_input_files(assets[0])
-
-        # Process JS code
-        if not ready_to_render and "render()" in js_code:
-            js_code = js_code.replace("// Render final video\n", "")
-            js_code = js_code.replace("await render();", "")
-
-        # Get the indentation of the last line
-        last_line = js_code.strip().split("\n")[-1]
-        indentation = " " * (len(last_line) - len(last_line.lstrip()))
-
-        if ready_to_render and "render()" not in js_code:
-            js_code += (
-                f"\n{indentation}// Render final video\n{indentation}await render();"
-            )
-        elif not ready_to_render and "sample()" not in js_code:
-            js_code += f"\n{indentation}// Generate samples for analysis\n{indentation}await sample();"
 
         return self.client.evaluate(js_code)
 

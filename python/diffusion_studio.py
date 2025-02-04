@@ -97,6 +97,8 @@ class DiffusionClient:
         """Evaluates the JavaScript code in the browser."""
         logger.info(f"Client received JS code: {js_code}")
 
+        self.samples = []
+
         if not self.page:
             logger.error("Page not initialized when trying to evaluate JavaScript")
             raise ValueError("Page not initialized")
