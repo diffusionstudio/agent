@@ -7,9 +7,6 @@ from client import DiffusionClient
 class VideoEditorTool(Tool):
     name = "video_editor_tool"
     description = """A tool that performs video editing operations using Diffusion Studio's web-based editor.
-    Handles both composition and rendering operations based on ready_to_render flag.
-    If ready_to_render=False, will automatically append sample() for analysis.
-    If ready_to_render=True, will ensure render() is present.
 
     The tool is designed to be used in conjunction with the VisualFeedbackTool.
     The VisualFeedbackTool will make a render decision based on the overall composition quality.
@@ -33,12 +30,12 @@ class VideoEditorTool(Tool):
         },
         "js_code": {
             "type": "string",
-            "description": "JavaScript code for video operations. render()/sample() will be auto-managed based on ready_to_render flag",
+            "description": "JavaScript code to manipulate the current composition",
             "nullable": False,
         },
         "output": {
             "type": "string",
-            "description": "Output path for the processed video (only used when rendering)",
+            "description": "Output path for the processed video (only used when rendering). Use output/video.mp4 by default.",
             "nullable": False,
         },
     }
