@@ -24,5 +24,4 @@ agent = CodeAgent(
     system_prompt=get_system_prompt(),
 )
 
-# Example of using both tools in sequence
 agent.run("Trim assets/big_buck_bunny_1080p_30fps.mp4 to 5 seconds")

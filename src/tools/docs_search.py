@@ -12,6 +12,7 @@ from src.utils import (
 class DocsSearchTool(Tool):
     name = "docs_search_tool"
     description = "A tool that searches through Diffusion Studio's documentation to find relevant code examples and syntax."
+    is_initialized = False
 
     inputs = {
         "query": {
@@ -38,7 +39,10 @@ class DocsSearchTool(Tool):
 
     def __init__(self):
         ensure_collection_exists()
-        auto_embed_pipeline(url=f"{settings.url}/llms.txt", hash_file=settings.hash_file)
+        auto_embed_pipeline(
+            url=f"{settings.url}/llms.txt", hash_file=settings.hash_file
+        )
+        self.is_initialized = True
 
     def forward(
         self,
