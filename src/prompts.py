@@ -23,9 +23,10 @@ QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
 SYSTEM_PROMPT_RULES = """
 ## Rules:
 - When using the VideoEditorTool, call `await sample()` at the end of the code and use VisualFeedbackTool to analyze the samples
-- DO NOT repeat the same code that was already executed, the VideoEditorTool is persistent and will keep the state of the video editor between calls.
-- If the VisualFeedbackTool returns a negative decision, you need to fix the issues and call `await sample()` again.
-- When the VisualFeedbackTool returns a positive decision, use call `await render()` with the VideoEditorTool to render the video
+- <callout>DO NOT REPEAT THE SAME CODE THAT WAS ALREADY EXECUTED<callout>, the VideoEditorTool is persistent and will keep the state of the composition between calls.
+- If you create a variable, you can reuse with the next evaluation. If you call `composition.add(video)` multiple times, it will add the same video multiple times.
+- If the VisualFeedbackTool rejects the composition, you need to fix the issues and call `await sample()` again.
+- When the VisualFeedbackTool accepts the composition, use call `await render()` with the VideoEditorTool **without anything else**.
 """
 
 def get_system_prompt():

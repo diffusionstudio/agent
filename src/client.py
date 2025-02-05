@@ -92,7 +92,6 @@ class DiffusionClient:
 
     def evaluate(self, js_code: str) -> str:
         """Evaluates the JavaScript code in the browser."""
-        logger.info(f"Client received JS code: {js_code}")
 
         self.samples = []  # Reset samples
 
