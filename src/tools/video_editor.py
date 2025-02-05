@@ -1,8 +1,7 @@
-from utils import clear_file_path
 from smolagents import Tool
 from typing import Any
 from loguru import logger
-from diffusion_studio import DiffusionClient
+from client import DiffusionClient
 
 
 class VideoEditorTool(Tool):
@@ -64,20 +63,13 @@ class VideoEditorTool(Tool):
     ) -> Any:
         """Main execution method that processes the video editing task."""
 
-        # Set output path and clear existing file
+        # Set output path and clear existing file (done by setter)
         self.client.output = output
-        clear_file_path(output)
-
-        # Set up input file
-        if not self.client.page:
-            raise ValueError("Page not initialized")
-
-        input_element = self.client.page.locator("#file-input")
-        input_element.set_input_files(assets[0])
+        self.client.upload_assets(assets)
 
         return self.client.evaluate(js_code)
 
-if __name__ == "__main__":
-    client = DiffusionClient()
-    tool = VideoEditorTool(client=client)
-    tool.forward()
+# if __name__ == "__main__":
+#     client = DiffusionClient()
+#     tool = VideoEditorTool(client=client)
+#     tool.forward()

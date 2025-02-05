@@ -4,7 +4,7 @@ import instructor
 
 from pydantic import BaseModel, Field
 from smolagents import Tool
-from diffusion_studio import DiffusionClient
+from client import DiffusionClient
 from typing import Any, List, Optional
 from loguru import logger
 

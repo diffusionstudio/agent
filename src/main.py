@@ -1,11 +1,11 @@
 from smolagents import CodeAgent, LiteLLMModel
 from settings import settings
 from prompts import get_system_prompt
-from diffusion_studio import DiffusionClient
-from diffusiton_studio_tools import (
+from client import DiffusionClient
+from tools import (
+    DocsSearchTool,
     VideoEditorTool,
     VisualFeedbackTool,
-    DocsSearchTool,
 )
 
 client = DiffusionClient()
