@@ -1,4 +1,4 @@
-from smolagents import CodeAgent, LiteLLMModel
+from smolagents import ToolCallingAgent, LiteLLMModel
 from src.settings import settings
 from src.prompts import get_system_prompt
 from src.client import DiffusionClient
@@ -10,7 +10,7 @@ from src.tools import (
 
 client = DiffusionClient()
 
-agent = CodeAgent(
+agent = ToolCallingAgent(
     tools=[
         DocsSearchTool(),
         VideoEditorTool(client=client),
