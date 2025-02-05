@@ -25,8 +25,4 @@ agent = CodeAgent(
 )
 
 # Example of using both tools in sequence
-agent.run(
-    """
-    Your goal is to clip big buck bunny to 150 frames, add it to the composition and render the result, assets/big_buck_bunny_1080p_30fps.mp4
-    """
-)
+agent.run("Trim assets/big_buck_bunny_1080p_30fps.mp4 to 150 frames")
