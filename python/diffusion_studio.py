@@ -1,10 +1,9 @@
-import base64
 import os
 import atexit
 from playwright.sync_api import sync_playwright, Playwright, Page, Browser
 from typing import Optional, cast, List
 from loguru import logger
-from config import settings
+from settings import settings
 
 
 class DiffusionClient:

@@ -1,5 +1,5 @@
 from smolagents import CodeAgent, LiteLLMModel
-from config import settings
+from settings import settings
 from prompts import get_system_prompt
 from diffusion_studio import DiffusionClient
 from diffusiton_studio_tools import (

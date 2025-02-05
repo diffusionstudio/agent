@@ -1,4 +1,4 @@
-from config import settings
+from settings import settings
 from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
 from utils import (

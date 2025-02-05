@@ -9,7 +9,7 @@ import unicodedata
 import ftfy
 
 from loguru import logger
-from config import settings
+from settings import settings
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from rich.console import Console
