@@ -1,3 +1,5 @@
+"""Video Composer Agent tools package."""
+
 from .docs_search import DocsSearchTool
 from .video_editor import VideoEditorTool
 from .visual_feedback import VisualFeedbackTool

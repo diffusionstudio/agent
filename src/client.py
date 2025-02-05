@@ -1,10 +1,12 @@
 import os
 import atexit
-from utils import clear_file_path
+
 from playwright.sync_api import sync_playwright, Playwright, Page, Browser
 from typing import Optional, List
 from loguru import logger
-from settings import settings
+
+from src.utils import clear_file_path
+from src.settings import settings
 
 
 class DiffusionClient:
@@ -90,7 +92,7 @@ class DiffusionClient:
             clear_file_path(value)
         self._output = value
 
-    def evaluate(self, js_code: str) -> str:
+    def evaluate(self, javascript: str) -> str:
         """Evaluates the JavaScript code in the browser."""
 
         self.samples = []  # Reset samples
@@ -106,7 +108,7 @@ class DiffusionClient:
             wrapped_code = f"""
             (async () => {{
                 try {{
-                    {js_code}
+                    {javascript}
                     return 'success';
                 }} catch (e) {{
                     console.error(e.message);

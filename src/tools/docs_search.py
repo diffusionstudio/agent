@@ -1,7 +1,8 @@
-from settings import settings
 from typing import List, Dict, Optional, Union, Any
 from smolagents import Tool
-from utils import (
+
+from src.settings import settings
+from src.utils import (
     ensure_collection_exists,
     auto_embed_pipeline,
     search_docs,

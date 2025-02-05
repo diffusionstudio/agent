@@ -55,7 +55,6 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/Ma
 To run the main script:
 
 ```bash
-cd src
 uv run main.py
 ```
 
