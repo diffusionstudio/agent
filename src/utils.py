@@ -9,14 +9,14 @@ import unicodedata
 import ftfy
 
 from loguru import logger
-from settings import settings
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from rich.console import Console
 from rich.panel import Panel
-
 from qdrant_client import QdrantClient
-from prompts import QUERY_PROMPT
+
+from src.prompts import QUERY_PROMPT
+from src.settings import settings
 
 
 from qdrant_client.models import (

@@ -1,8 +1,8 @@
 from smolagents import CodeAgent, LiteLLMModel
-from settings import settings
-from prompts import get_system_prompt
-from client import DiffusionClient
-from tools import (
+from src.settings import settings
+from src.prompts import get_system_prompt
+from src.client import DiffusionClient
+from src.tools import (
     DocsSearchTool,
     VideoEditorTool,
     VisualFeedbackTool,
@@ -25,4 +25,4 @@ agent = CodeAgent(
 )
 
 # Example of using both tools in sequence
-agent.run("Trim assets/big_buck_bunny_1080p_30fps.mp4 to 150 frames")
+agent.run("Trim assets/big_buck_bunny_1080p_30fps.mp4 to 5 seconds")

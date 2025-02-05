@@ -1,17 +1,18 @@
-import tempfile
 import anthropic
 import instructor
+
 from pydantic import BaseModel, Field
 from smolagents import Tool
-from client import DiffusionClient
 from typing import Any, List, Optional
 from loguru import logger
 from enum import Enum
 
+from src.client import DiffusionClient
+
 MAX_IMAGES_PER_BATCH = 100
 
-VISUAL_FEEDBACK_PROMPT = """
-You are an advanced video editing assistant that reviews a series of **image samples**, each taken **every 30 frames** from a video. The time is indicated in the upper right corner of each sample. Your job is to verify that the editing aligns with the given editing goal.
+VISUAL_FEEDBACK_SYSTEM_PROMPT = """
+You are an advanced video editing assistant that reviews a series of **image samples**, each taken **every 30 frames** from a video. The last sample is taken at the end of the video. The time is indicated in the upper right corner of each sample. Your job is to verify that the editing aligns with the given editing goal.
 
 Your Task:
 	•	Analyze each sample (not individual frames) to check if it meets the editing goal.
@@ -32,15 +33,15 @@ Important Clarifications:
     •	**Do NOT mistake a sample for frames or seconds.** You are analyzing images taken every 30 frames or 1 second, not continuous frames.
 	•	**Do NOT judge video quality** (e.g., resolution, lighting, camera work) unless the issue affects editing alignment.
 	•	**Do NOT assume a video is too long or too short based on sample similarity.** Instead, verify if the actual length aligns with the edit goal.
+    •	**Do NOT infer the exact video length** based on the number of samples. Use the time indicators seen in the samples instead.
 	•	**Variations in shot composition** (e.g., wide shots vs. close-ups) are only problematic if they contradict the user's goal (e.g., if the goal specifies "consistent framing" but shots vary).
 	•	**Only point out clear violations of the editing goal.** If you're not certain, explain exaclty why it's not aligned with the goal.
     •	**Be aware that the last frame might not have been sampled because it's not in the 30 frames range.**
-    •	**Do NOT infer the exact video length** based on the number of samples. Use the time indicators seen in the samples instead.
 
 Response Format:
 
 ✅ If the sample aligns with the editing goal:
-	•	"Everything checks out."
+	•	Approve the sample
 
 ❌ If there's an issue:
 	•	"Issue detected: The text is not centered. Adjust the alignment to match the goal."
@@ -165,7 +166,6 @@ class VisualFeedbackTool(Tool):
         self.anthropic_client = instructor.from_anthropic(base_client)
         self.model = "claude-3-5-sonnet-latest"
         self.client = client
-        self.temp_dir = tempfile.mkdtemp()
 
     def forward(
         self,
@@ -193,6 +193,9 @@ class VisualFeedbackTool(Tool):
                         batch_start + i - 1
                     ) * 30  # Each sample is 30 frames apart
                     current_second = current_frame / 30  # Convert frames to seconds
+
+                    print(f"Frame {current_frame} | Time: {current_second:.2f}s:")
+
                     message_content.extend(
                         [
                             {
@@ -216,7 +219,7 @@ class VisualFeedbackTool(Tool):
                 batch_analysis = self.anthropic_client.messages.create(
                     model=self.model,
                     max_tokens=1024,
-                    system=VISUAL_FEEDBACK_PROMPT,
+                    system=VISUAL_FEEDBACK_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": message_content}],
                     response_model=BatchAnalysis,
                 )

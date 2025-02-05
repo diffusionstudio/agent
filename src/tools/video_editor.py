@@ -1,8 +1,8 @@
 from smolagents import Tool
 from typing import Any
 from loguru import logger
-from client import DiffusionClient
 
+from src.client import DiffusionClient
 
 class VideoEditorTool(Tool):
     name = "video_editor_tool"

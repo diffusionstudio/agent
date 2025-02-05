@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     infinity_api_key: str = Field(default="sk-dummy")
     infinity_embedding_model: str = "mixedbread-ai/mxbai-embed-large-v1"
     infinity_rerank_model: str = "mixedbread-ai/mxbai-rerank-base-v1"
-    url: str = "https://operator.diffusion.studio"  # TODO: change to https://operator.diffusion.studio
+    url: str = "https://operator.diffusion.studio"  # or: change to http://localhost:5173
     hash_file: str = "docs/content_hash.txt"
 
     qdrant_path: str = "embeddings/vector_db"

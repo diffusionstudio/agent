@@ -1,6 +1,7 @@
 import requests
 from smolagents import CODE_SYSTEM_PROMPT
-from settings import settings
+
+from src.settings import settings
 
 DOCUMENT_CONTEXT_PROMPT = """
 <document>
