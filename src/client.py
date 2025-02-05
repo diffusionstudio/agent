@@ -1,23 +1,28 @@
-import base64
 import os
 import atexit
+from utils import clear_file_path
 from playwright.sync_api import sync_playwright, Playwright, Page, Browser
-from typing import Optional, cast, List
+from typing import Optional, List
 from loguru import logger
-from config import settings
+from settings import settings
 
 
 class DiffusionClient:
     """Client for the Diffusion Studio editor."""
 
+    # Private attributes
+    _output: Optional[str] = None
+    _assets: Optional[list[str]] = None
+
+    # Public attributes
+    browser: Browser
+    page: Page
+    samples: List[str] = []
+    executable_path = settings.playwright_chromium_executable_path
+    web_socket_url = settings.playwright_web_socket_url
+
     def __init__(self):
         """Initialize the Diffusion Studio client."""
-        self.browser: Browser
-        self.page: Page
-        self.samples: List[str] = []
-        self.output: Optional[str] = None
-        self.executable_path = settings.playwright_chromium_executable_path
-        self.web_socket_url = settings.playwright_web_socket_url
         self.playwright = sync_playwright().start()
         self.init(self.playwright)
         atexit.register(self.close)  # Auto-close on exit
@@ -26,44 +31,33 @@ class DiffusionClient:
         """Connects to the remote browser with API key. And sets up the editor."""
         try:
             if self.web_socket_url:
-                logger.debug("Connecting to remote browser via websocket ...")
                 self.browser = playwright.chromium.connect_over_cdp(self.web_socket_url)
-                logger.debug("Connected to remote browser via websocket")
+                logger.debug("Connected to remote browser via cdp")
             else:
-                logger.info("Launching local browser...")
                 self.browser = playwright.chromium.launch(
                     executable_path=self.executable_path
                 )
                 logger.debug("Local browser launched")
 
-            if not self.browser:
-                raise Exception("Browser not initialized")
-
-            page = self.browser.new_page()
-            if not page:
-                raise Exception("Page not created")
-            self.page = cast(Page, page)
-
-            logger.debug("Created new page")
+            self.page = self.browser.new_page()
 
             logger.info("Loading editor interface...")
-            page = cast(Page, self.page)  # Type assertion for mypy
-            page.goto(settings.url)
-            page.wait_for_function("typeof window.core !== 'undefined'")
+            self.page.goto(settings.url)
+            self.page.wait_for_function("typeof window.core !== 'undefined'")
             logger.debug("Editor interface loaded")
 
-            page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
-            page.expose_function("saveChunk", self.save_chunk)
+            self.page.on("console", lambda msg: logger.debug(f"[Browser]: {msg.text}"))
+            self.page.expose_function("saveChunk", self._save_chunk)
             logger.debug("Exposed save_chunk function to browser")
 
-            page.expose_function("saveSample", self.save_sample)
+            self.page.expose_function("saveSample", self._save_sample)
             logger.debug("Exposed save_sample function to browser")
 
         except Exception as e:
             logger.exception(f"Failed to launch editor: {str(e)}")
             raise
 
-    def save_chunk(self, data: list[int], position: int) -> None:
+    def _save_chunk(self, data: list[int], position: int) -> None:
         """Writes the received video chunk at the specified position."""
         if not self.output:
             logger.error("Output path not set when trying to save chunk")
@@ -82,20 +76,25 @@ class DiffusionClient:
             logger.error(f"Failed to save chunk: {str(e)}")
             raise
 
-    def save_sample(self, data: str) -> None:
+    def _save_sample(self, data: str) -> None:
         """Saves a sample video to the output directory."""
         self.samples.append(data.replace("data:image/jpeg;base64,", ""))
 
-    def _ensure_output_directory(self, output_path: str) -> None:
-        """Ensure the output directory exists."""
-        output_dir = os.path.dirname(output_path)
-        if output_dir:
-            logger.debug(f"Creating output directory: {output_dir}")
-            os.makedirs(output_dir, exist_ok=True)
+    @property
+    def output(self) -> Optional[str]:
+        return self._output
+
+    @output.setter
+    def output(self, value: Optional[str]) -> None:
+        if value:
+            clear_file_path(value)
+        self._output = value
 
     def evaluate(self, js_code: str) -> str:
         """Evaluates the JavaScript code in the browser."""
         logger.info(f"Client received JS code: {js_code}")
+
+        self.samples = []  # Reset samples
 
         if not self.page:
             logger.error("Page not initialized when trying to evaluate JavaScript")
@@ -129,13 +128,25 @@ class DiffusionClient:
         except Exception as e:
             return str(e)
 
+    def upload_assets(self, assets: list[str]) -> None:
+        """Uploads the assets to the editor."""
+
+        # If the assets are the same as the previous ones, do nothing
+        if assets == self._assets:
+            return
+
+        input_element = self.page.locator("#file-input")
+        input_element.set_input_files(assets[0])
+
+        self._assets = assets
+
     def close(self):
         """Closes the browser and playwright."""
         try:
-            if hasattr(self, 'browser') and self.browser:
+            if hasattr(self, "browser") and self.browser:
                 self.browser.close()
                 logger.debug("Browser closed")
-            if hasattr(self, 'playwright') and self.playwright:
+            if hasattr(self, "playwright") and self.playwright:
                 self.playwright.stop()
                 logger.debug("Playwright stopped")
         except Exception as e:
