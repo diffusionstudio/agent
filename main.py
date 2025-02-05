@@ -1,4 +1,4 @@
-from smolagents import ToolCallingAgent, LiteLLMModel
+from smolagents import CodeAgent, LiteLLMModel
 from src.settings import settings
 from src.prompts import get_system_prompt
 from src.client import DiffusionClient
@@ -10,7 +10,7 @@ from src.tools import (
 
 client = DiffusionClient()
 
-agent = ToolCallingAgent(
+agent = CodeAgent(
     tools=[
         DocsSearchTool(),
         VideoEditorTool(client=client),
@@ -24,5 +24,4 @@ agent = ToolCallingAgent(
     system_prompt=get_system_prompt(),
 )
 
-# Example of using both tools in sequence
 agent.run("Trim assets/big_buck_bunny_1080p_30fps.mp4 to 5 seconds")
