@@ -46,7 +46,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/Ma
 - [ ] Add DAPI support for speech recognition and synthesis workloads
 - [ ] Add [VideoLLaMA](https://github.com/DAMO-NLP-SG/VideoLLaMA3) support
 - [ ] Add State management for VideoEditor Tool
-- [ ] Reuse browser session for forward steps and render the composition when editing instructions are fulfilled
+- [X] Reuse browser session for forward steps and render the composition when editing instructions are fulfilled
 - [ ] Feed [browser session recording](https://playwright.dev/python/docs/videos) back to video undertanding model and enable agent to call pause/play/seek
 
 
