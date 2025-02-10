@@ -17,38 +17,20 @@ pip install uv
 ```
 
 ```bash
+uv sync
+```
+
+or alternatively:
+
+```bash
 uv add -r requirements.txt
 ```
 
 ## Environment Variables
 
-Create a `.env` file with the following variables:
-```
-ANTHROPIC_API_KEY=sk-ant-...
-HUGGINGFACE_TOKEN=hf_...
-# Make sure the browser supports common audio/video codecs
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-# Alternatively, you can use a remote browser (connect over cdp)
-# PLAYWRIGHT_WEB_SOCKET_URL=ws://localhost:3000
-```
+You will need to use the environment variables defined in `.env.example` to run Video Composer Agent. It's recommended you use Vercel Environment Variables for this, but a `.env` file is all that is necessary.
 
-## ToDos
-
-- [X] Add auto-embedding of new docs
-    - Add a tool to fetch the latest docs from the operator-ui repo
-    - Checks hash of the file to see if it has changed
-    - If it has changed, parse `---` as chunks feed into embed pipeline
-    - If it has not changed, skip embedding and just use the existing vector db
-- [ ] Add [BM25](https://github.com/anthropics/anthropic-cookbook/blob/main/skills/contextual-embeddings/guide.ipynb) to enable hybrid search
-- [ ] Add [MCP](https://modelcontextprotocol.io/introduction) integration
-    > MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
-    Also see: [Simple Chatbot](https://github.com/modelcontextprotocol/python-sdk/tree/main/examples/clients/simple-chatbot)
-- [ ] Add DAPI support for speech recognition and synthesis workloads
-- [ ] Add [VideoLLaMA](https://github.com/DAMO-NLP-SG/VideoLLaMA3) support
-- [ ] Add State management for VideoEditor Tool
-- [X] Reuse browser session for forward steps and render the composition when editing instructions are fulfilled
-- [ ] Feed [browser session recording](https://playwright.dev/python/docs/videos) back to video undertanding model and enable agent to call pause/play/seek
-
+**Note:** You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various OpenAI and authentication provider accounts.
 
 ## Run Agent
 
@@ -60,51 +42,48 @@ uv run main.py
 
 Feel free to modify the `main.py` script to add new tools and modify the agent's behavior.
 
-## Documentation Search & Evaluation
+## Documentation Search
 
-The `docs_embedder.py` script provides tools for embedding, searching, and evaluating documentation:
+The documentation search system provides semantic search capabilities for Diffusion Studio's documentation:
 
-### Embed Documentation
-```bash
-# Auto-embed from URL (default: operator-ui.vercel.app/llms.txt)
-uv run docs_embedder.py auto-embed
+### Usage
+```python
+from src.tools.docs_search import DocsSearchTool
 
-# Debug mode (first 5 chunks only)
-uv run docs_embedder.py auto-embed --debug
+# Initialize search tool
+docs_search = DocsSearchTool()
 
-# Force update embeddings (ignore hash check)
-uv run docs_embedder.py auto-embed --force
-
-# Custom URL and hash file
-uv run docs_embedder.py auto-embed --url "https://your-url.com/docs.txt" --hash-file "path/to/hash.txt"
-```
-
-### Search Documentation
-```bash
 # Basic search
-uv run docs_embedder.py search "how to add text overlay"
+results = docs_search.forward(query="how to add text overlay")
 
-# With reranking (more accurate)
-uv run docs_embedder.py search --rerank "how to add text overlay"
+# With reranking for more accurate results
+results = docs_search.forward(query="how to add text overlay", rerank_results=True)
 
-# Limit results
-uv run docs_embedder.py search --limit 10 "how to add text overlay"
+# Limit number of results
+results = docs_search.forward(query="how to add text overlay", limit=10)
 
-# Show full content
-uv run docs_embedder.py search --full-content "how to add text overlay"
-
-# Filter by file
-uv run docs_embedder.py search --filepath "video-clip.md" "how to trim video"
+# With filters
+results = docs_search.forward(
+    query="video transitions",
+    filter_conditions={"section": "video-effects"}
+)
 ```
 
-### Evaluate Search Quality
-```bash
-# Run evaluation on QnA pairs
-uv run docs_embedder.py eval
-```
+The search tool:
+- Uses vector embeddings for fast semantic search
+- Supports optional semantic reranking for higher accuracy
+- Allows filtering by documentation sections
+- Auto-embeds documentation from configured URL
+- Maintains embedding cache with hash checking
 
-The eval command:
-- Tests search against known question/answer pairs
-- Compares vector search vs reranking
-- Shows metrics like accuracy, rank@1, and semantic matches
-- Displays detailed results for each query
+## Development
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
+
+## ToDos PRs Welcome
+- [ ] Make python agent fully async
+- [ ] Add TS implementation of agent
+- [ ] Add [MCP](https://modelcontextprotocol.io/introduction) integration
+    > MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
+- [ ] Add [BM25](https://github.com/anthropics/anthropic-cookbook/blob/main/skills/contextual-embeddings/guide.ipynb) to `DocsSearchTool` to enable hybrid search
+- [ ] Add support for video understanding models like [VideoLLaMA](https://github.com/DAMO-NLP-SG/VideoLLaMA3)
