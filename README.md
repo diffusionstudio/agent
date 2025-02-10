@@ -81,7 +81,8 @@ The search tool:
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
 ## ToDos PRs Welcome
-
+- [ ] Make python agent fully async
+- [ ] Add TS implementation of agent
 - [ ] Add [MCP](https://modelcontextprotocol.io/introduction) integration
     > MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
 - [ ] Add [BM25](https://github.com/anthropics/anthropic-cookbook/blob/main/skills/contextual-embeddings/guide.ipynb) to `DocsSearchTool` to enable hybrid search
