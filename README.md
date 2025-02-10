@@ -42,6 +42,9 @@ uv run main.py
 
 Feel free to modify the `main.py` script to add new tools and modify the agent's behavior.
 
+## Demo
+https://github.com/user-attachments/assets/55625231-89ce-4bf5-af45-de0672e597e1
+
 ## Documentation Search
 
 The documentation search system provides semantic search capabilities for Diffusion Studio's documentation:
